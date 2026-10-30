@@ -8,7 +8,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 - Logo (`docs/assets/logo.svg`), used in the README and as the docs site's logo and favicon.
 - `cachemaxxing.langchain.CacheMiddleware` for LangChain 1.x / LangGraph agents: per-provider cache fields on every model call (OpenAI GPT-5.6+ breakpoints, Anthropic markers and automatic caching), usage per call site, and an `on_record` hook for `cachemaxxing report`. New extra: `cachemaxxing[langchain]`.
-- `examples/langchain_agent.py`.
+- `cachemaxxing.langchain.CachedModel` (wrap a chat model for hand-built LangGraph graphs and LCEL chains) and `cache_fields()` (the low-level piece).
+- `examples/langchain_agent.py` and `examples/langgraph_custom.py`.
 
 ### Fixed
 

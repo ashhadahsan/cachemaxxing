@@ -2,6 +2,16 @@
 
 Install: `pip install "cachemaxxing[langchain]"`, plus your provider's LangChain package (`langchain-openai`, `langchain-anthropic` or `langchain-google-genai`). `import cachemaxxing` on its own never imports LangChain.
 
+| You use | Use this | What you write |
+|---|---|---|
+| LangChain agents: `create_agent`, which runs on LangGraph | `CacheMiddleware` | `middleware=[CacheMiddleware("support.agent")]` |
+| A hand-built LangGraph `StateGraph` | `CachedModel` | `llm = CachedModel(model, system=SYSTEM)` then `llm.invoke(state["messages"])` |
+| LangChain chains (LCEL) and direct calls | `CachedModel` | `prompt \| CachedModel(model)` |
+| Full control in your own code | `cache_fields()` | `system, extra = cache_fields(model, SYSTEM)` |
+| Measuring any LangChain response | `usage()` | `usage(ai_message)` |
+
+All of them follow the same per-provider rules: an explicit breakpoint on the system prompt plus implicit mode on OpenAI GPT-5.6+, a `prompt_cache_key` on older OpenAI models, a system marker plus automatic tail caching on Anthropic, and nothing on Gemini, which caches implicitly.
+
 ## Cache an agent: `CacheMiddleware`
 
 For agents built with LangChain 1.x `create_agent`, which run on LangGraph:
@@ -43,6 +53,45 @@ Some middleware rewrites the cached prefix on every call and will lower your hit
 - summarization or context-editing middleware that rewrites history
 
 `cachemaxxing report` and `cachemaxxing diff` on the `on_record` log show where.
+
+## Custom LangGraph graphs and chains: `CachedModel`
+
+Middleware only runs inside `create_agent`. In your own graph, wrap the chat model once. Bound tools are fine. Every call then gets the system prompt, the right cache fields, and its usage recorded:
+
+```python
+from langchain.chat_models import init_chat_model
+from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from cachemaxxing.langchain import CachedModel
+
+llm = CachedModel(init_chat_model("openai:gpt-6-luna").bind_tools(tools), system=SYSTEM, call_site="graph.support")
+
+def model_node(state: MessagesState):
+    return {"messages": [llm.invoke(state["messages"])]}
+
+graph = StateGraph(MessagesState)
+graph.add_node("model", model_node)
+graph.add_node("tools", ToolNode(tools))
+graph.add_edge(START, "model")
+graph.add_conditional_edges("model", tools_condition)
+graph.add_edge("tools", "model")
+app = graph.compile()
+# ... app.invoke(...) ...
+print(llm.stats.table())
+```
+
+A leading `SystemMessage` in the input is used as it is, and marked; otherwise `system=` is prepended. `CachedModel` is a LangChain `Runnable`, so it also works in chains:
+
+```python
+chain = ChatPromptTemplate.from_messages([("system", SYSTEM), ("human", "{question}")]) | CachedModel(llm)
+```
+
+Live runs on 2026-10-30, 4 model calls each including a tool loop ([`examples/langgraph_custom.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/langgraph_custom.py)):
+
+- Starting from a cold cache, 74% of input was cached on `claude-haiku-5-5`.
+- With the system prompt already warm from an earlier conversation, 98% was cached on both `gpt-6-luna` and `claude-haiku-5-5`.
+
+`cache_fields(model, system)` is the lower-level piece both are built on. It returns the marked system message and the extra `invoke` kwargs, for code that assembles calls itself.
 
 ## Measure any LangChain call
 
