@@ -142,3 +142,70 @@ def test_recorded_live_gemini_response() -> None:
     u = usage(live)
     assert (u.provider, u.model) == ("gemini", live["model_version"])
     assert (u.input, u.cache_read) == (7144, 5099) and u.est_cost is not None
+
+
+def ai_message(provider: str, model: str, usage_metadata: dict[str, Any]) -> Any:
+    messages = pytest.importorskip("langchain_core.messages")
+    meta = {"model_provider": provider, "model_name": model}
+    return messages.AIMessage(content="ok", usage_metadata=usage_metadata, response_metadata=meta)
+
+
+def test_langchain_ai_message_anthropic_ttl_split() -> None:
+    m = ai_message(
+        "anthropic",
+        "claude-haiku-5-5",
+        {
+            "input_tokens": 10100,
+            "output_tokens": 50,
+            "total_tokens": 10150,
+            "input_token_details": {"cache_read": 9000, "cache_creation": 0, "ephemeral_5m_input_tokens": 1000},
+        },
+    )
+    u = usage(m)
+    assert (u.provider, u.model, u.input, u.cache_read, u.cache_write, u.output) == (
+        "anthropic",
+        "claude-haiku-5-5",
+        10100,
+        9000,
+        1000,
+        50,
+    )
+    assert u.est_cost == pytest.approx((100 * 0.10 + 9000 * 0.01 + 1000 * 0.125 + 50 * 0.50) / 1e6)
+
+
+def test_langchain_ai_message_openai_gemini_and_priority_tier() -> None:
+    details = {"cache_read": 4000, "cache_creation": 7000}
+    o = usage(
+        ai_message(
+            "openai",
+            "gpt-6-luna",
+            {"input_tokens": 12000, "output_tokens": 10, "total_tokens": 12010, "input_token_details": details},
+        )
+    )
+    assert (o.provider, o.cache_read, o.cache_write) == ("openai", 4000, 7000)
+    g = usage(
+        ai_message(
+            "google_genai",
+            "gemini-3.8-flash",
+            {
+                "input_tokens": 5000,
+                "output_tokens": 50,
+                "total_tokens": 5050,
+                "input_token_details": {"cache_read": 4096},
+            },
+        )
+    )
+    assert (g.provider, g.input, g.cache_read, g.output) == ("gemini", 5000, 4096, 50)
+    p = usage(
+        ai_message(
+            "openai",
+            "gpt-6-luna",
+            {
+                "input_tokens": 100,
+                "output_tokens": 1,
+                "total_tokens": 101,
+                "input_token_details": {"priority_cache_read": 80},
+            },
+        )
+    )
+    assert p.cache_read == 80

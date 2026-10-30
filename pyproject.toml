@@ -26,6 +26,7 @@ anthropic = ["anthropic>=2.3"]
 openai = ["openai>=3.41"]
 gemini = ["google-genai>=2.34"]
 litellm = ["litellm>=1.106"]  # never 1.82.7/1.82.8 (compromised 2026-03-24)
+langchain = ["langchain>=1.4.7"]
 
 [project.urls]
 Homepage = "https://ashhadahsan.github.io/cachemaxxing/"
@@ -40,7 +41,19 @@ requires = ["uv_build>=0.13.6,<0.14"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["pytest>=9.2", "ruff>=0.17.3", "mypy>=2.4.1", "anthropic>=2.3", "openai>=3.41", "google-genai>=2.34", "httpx>=0.28"]
+dev = [
+    "pytest>=9.2",
+    "ruff>=0.17.3",
+    "mypy>=2.4.1",
+    "anthropic>=2.3",
+    "openai>=3.41",
+    "google-genai>=2.34",
+    "httpx>=0.28",
+    "langchain>=1.4.7",
+    "langchain-openai>=1.7.3",
+    "langchain-anthropic>=1.7.7",
+    "langchain-google-genai>=4.4.2",
+]
 docs = [
     "mkdocstrings-python>=2.0.10",
     "zensical==0.0.73",
