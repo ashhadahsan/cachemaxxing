@@ -79,10 +79,11 @@ def projected_usd(input_price: float, output_price: float, turns: int, reps: int
     return 2 * reps * per_run / 1e6  # 2 arms
 
 
-def summarize(runs: list[list[Usage]]) -> dict[str, Any]:
+def summarize(runs: list[list[Usage]], overhead_usd: float = 0.0) -> dict[str, Any]:
+    """Per-arm summary; overhead_usd (e.g. explicit-cache creation + storage) is spread over the conversations."""
     totals = [sum(r[1:], r[0]) for r in runs]
     pct = [round(100 * t.hit_rate, 1) for t in totals]
-    usd = [round(t.est_cost or 0.0, 6) for t in totals]
+    usd = [round((t.est_cost or 0.0) + overhead_usd / len(runs), 6) for t in totals]
     return {
         "cached_pct": {"mean": round(sum(pct) / len(pct), 1), "min": min(pct), "max": max(pct)},
         "est_usd": {"mean": round(sum(usd) / len(usd), 6), "min": min(usd), "max": max(usd)},
@@ -93,7 +94,14 @@ def summarize(runs: list[list[Usage]]) -> dict[str, Any]:
     }
 
 
-def write_results(provider: str, model: str, sdk: str, turns: int, arms: dict[str, list[list[Usage]]]) -> Path:
+def write_results(
+    provider: str,
+    model: str,
+    sdk: str,
+    turns: int,
+    arms: dict[str, list[list[Usage]]],
+    overhead_usd: dict[str, float] | None = None,
+) -> Path:
     out = Path(__file__).parent / "results" / f"{provider}.json"
     out.parent.mkdir(exist_ok=True)
     doc = {
@@ -108,7 +116,9 @@ def write_results(provider: str, model: str, sdk: str, turns: int, arms: dict[st
             "note": "fresh static prefix per invocation (first conversation cold); one customer per conversation",
             "naive_habits": HABITS,
         },
-        "arms": {name: summarize(runs) for name, runs in arms.items()},
+        "arms": {name: summarize(runs, (overhead_usd or {}).get(name, 0.0)) for name, runs in arms.items()},
     }
+    if overhead_usd:
+        doc["explicit_cache_overhead_usd"] = overhead_usd
     out.write_text(json.dumps(doc, indent=2) + "\n")
     return out

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="viz" viewBox="0 0 720 400" width="720" height="400" role="img" aria-labelledby="title desc">
+<style>
+  .viz { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .bg { fill:#fcfcfb; } .t { fill:#0b0b0b; } .t2 { fill:#52514e; } .m { fill:#898781; }
+  .grid { stroke:#e1e0d9; } .axis { stroke:#c3c2b7; } .s1 { fill:#2a78d6; } .s2 { fill:#eb6834; }
+  .n { font-variant-numeric:tabular-nums; }
+  @media (prefers-color-scheme: dark) {
+    .bg { fill:#1a1a19; } .t { fill:#f0efec; } .t2 { fill:#c3c2b7; }
+    .grid { stroke:#2c2c2a; } .axis { stroke:#383835; } .s1 { fill:#3987e5; } .s2 { fill:#d95926; }
+  }
+</style>
+<rect width="720" height="400" rx="8" class="bg"/>
+<title id="title">Cached input tokens per 8-turn chat: naive vs cachemaxxing</title>
+<desc id="desc">Anthropic claude-haiku-5-5: naive 0.0%, cachemaxxing 94.8%; OpenAI gpt-6-luna: naive 0.0%, cachemaxxing 93.1%; Gemini gemini-3.8-flash: naive 0.0%, cachemaxxing 97.5%</desc>
+<text x="56" y="30" class="t" font-size="16" font-weight="600">Cached input tokens per 8-turn chat</text>
+<text x="56" y="50" class="t2" font-size="12">mean of 3 conversations · cheapest caching model per provider · est. $ at list price · 2026-10-30</text>
+<rect x="56" y="64" width="10" height="10" rx="2" class="s1"/>
+<text x="72" y="73" class="t2" font-size="12">naive</text>
+<rect x="186" y="64" width="10" height="10" rx="2" class="s2"/>
+<text x="202" y="73" class="t2" font-size="12">cachemaxxing</text>
+<line x1="56" x2="696" y1="324.0" y2="324.0" class="axis" stroke-width="1"/>
+<text x="48" y="328.0" text-anchor="end" class="m n" font-size="11">0%</text>
+<line x1="56" x2="696" y1="266.0" y2="266.0" class="grid" stroke-width="1"/>
+<text x="48" y="270.0" text-anchor="end" class="m n" font-size="11">25%</text>
+<line x1="56" x2="696" y1="208.0" y2="208.0" class="grid" stroke-width="1"/>
+<text x="48" y="212.0" text-anchor="end" class="m n" font-size="11">50%</text>
+<line x1="56" x2="696" y1="150.0" y2="150.0" class="grid" stroke-width="1"/>
+<text x="48" y="154.0" text-anchor="end" class="m n" font-size="11">75%</text>
+<line x1="56" x2="696" y1="92.0" y2="92.0" class="grid" stroke-width="1"/>
+<text x="48" y="96.0" text-anchor="end" class="m n" font-size="11">100%</text>
+<path d="M97.7,324.0V323.5Q97.7,323.0 98.2,323.0H161.2Q161.7,323.0 161.7,323.5V324.0Z" class="s1"><title>Anthropic · naive: 0.0% cached (runs 0.0–0.0%), ~$0.0092/conversation</title></path>
+<text x="129.7" y="318.0" text-anchor="middle" class="t n" font-size="12">0%</text>
+<path d="M163.7,324.0V108.1Q163.7,104.1 167.7,104.1H223.7Q227.7,104.1 227.7,108.1V324.0Z" class="s2"><title>Anthropic · cachemaxxing: 94.8% cached (runs 87.3–98.5%), ~$0.0017/conversation</title></path>
+<text x="195.7" y="98.1" text-anchor="middle" class="t n" font-size="12">94.8%</text>
+<text x="162.7" y="346" text-anchor="middle" class="t" font-size="13" font-weight="600">Anthropic</text>
+<text x="162.7" y="363" text-anchor="middle" class="t2" font-size="11">claude-haiku-5-5</text>
+<text x="162.7" y="380" text-anchor="middle" class="t2 n" font-size="11">$0.0092 → $0.0017 per conversation</text>
+<path d="M311.0,324.0V323.5Q311.0,323.0 311.5,323.0H374.5Q375.0,323.0 375.0,323.5V324.0Z" class="s1"><title>OpenAI · naive: 0.0% cached (runs 0.0–0.0%), ~$0.0070/conversation</title></path>
+<text x="343.0" y="318.0" text-anchor="middle" class="t n" font-size="12">0%</text>
+<path d="M377.0,324.0V112.0Q377.0,108.0 381.0,108.0H437.0Q441.0,108.0 441.0,112.0V324.0Z" class="s2"><title>OpenAI · cachemaxxing: 93.1% cached (runs 85.0–97.1%), ~$0.0012/conversation</title></path>
+<text x="409.0" y="102.0" text-anchor="middle" class="t n" font-size="12">93.1%</text>
+<text x="376.0" y="346" text-anchor="middle" class="t" font-size="13" font-weight="600">OpenAI</text>
+<text x="376.0" y="363" text-anchor="middle" class="t2" font-size="11">gpt-6-luna</text>
+<text x="376.0" y="380" text-anchor="middle" class="t2 n" font-size="11">$0.0070 → $0.0012 per conversation</text>
+<path d="M524.3,324.0V323.5Q524.3,323.0 524.8,323.0H587.8Q588.3,323.0 588.3,323.5V324.0Z" class="s1"><title>Gemini · naive: 0.0% cached (runs 0.0–0.0%), ~$0.0484/conversation</title></path>
+<text x="556.3" y="318.0" text-anchor="middle" class="t n" font-size="12">0%</text>
+<path d="M590.3,324.0V101.8Q590.3,97.8 594.3,97.8H650.3Q654.3,97.8 654.3,101.8V324.0Z" class="s2"><title>Gemini · cachemaxxing: 97.5% cached (runs 97.5–97.5%), ~$0.0094/conversation</title></path>
+<text x="622.3" y="91.8" text-anchor="middle" class="t n" font-size="12">97.5%</text>
+<text x="589.3" y="346" text-anchor="middle" class="t" font-size="13" font-weight="600">Gemini</text>
+<text x="589.3" y="363" text-anchor="middle" class="t2" font-size="11">gemini-3.8-flash</text>
+<text x="589.3" y="380" text-anchor="middle" class="t2 n" font-size="11">$0.0484 → $0.0094 per conversation</text>
+</svg>
