@@ -212,3 +212,4 @@ cachemaxxing/
 | D10 | Benchmark models: gemini-3.8-flash, gpt-6-luna, claude-haiku-5-5 | The cheapest current model per provider whose caching works on the owner's tier |
 | D11 | Zensical, configured through `mkdocs.yml` | Material is EOL in 2027-05; `mkdocs.yml` keeps a fallback while Zensical is in alpha |
 | D12 | `pypa/gh-action-pypi-publish` rather than `uv publish` | Attestations by default without an extra action |
+| D13 | Stale markers in fed-back history: stripped for Anthropic, kept for OpenAI GPT-5.6+ | Anthropic caps a request at 4 markers and its 20-block lookback finds earlier entries without them. OpenAI only looks up at breakpoints present in the request, so earlier ones are the read points (verified live 2026-10-30: kept, reads grow every turn; stripped, reads stay at the static prefix). |
