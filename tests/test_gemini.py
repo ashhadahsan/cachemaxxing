@@ -48,6 +48,7 @@ class AsyncCaches:
 @pytest.fixture(autouse=True)
 def fresh_memo() -> None:
     gemini._LIVE.clear()
+    gemini._TOKENS.clear()
 
 
 def client() -> Any:
@@ -94,3 +95,20 @@ def test_function_tools_skip_explicit_cache() -> None:
     p = Prompt("site").tools([get_weather]).system("policy " * 8000)
     assert gemini.gemini_cache(c, p, "gemini-3.8-flash", expected_reuses=20) is None
     assert c.caches.created == []
+
+
+def test_exact_count_decides_and_is_memoized() -> None:
+    c = client()
+    counted: list[str] = []
+
+    def count_tokens(**kw: Any) -> Any:
+        counted.append(kw["model"])
+        return SimpleNamespace(total_tokens=5000)
+
+    c.models = SimpleNamespace(count_tokens=count_tokens)
+    small = Prompt("site").system("x " * 7000)  # estimated ~3.5k tokens: under the 4,096 minimum
+    assert small.est_prefix_tokens() < 4096
+    name = gemini.gemini_cache(c, small, "gemini-3.8-flash", expected_reuses=20)
+    assert name == "cachedContents/0"  # the exact count (5,000) clears the minimum
+    gemini.gemini_cache(c, small, "gemini-3.8-flash", expected_reuses=20)
+    assert counted == ["gemini-3.8-flash"]
