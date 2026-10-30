@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-30
+
 ### Added
 
 - `Prompt`: segments ordered from most to least stable (tools, system, context, examples, history, retrieved, user), with deterministic serialization.
@@ -17,3 +19,6 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - Benchmarks: naive vs cachemaxxing on claude-haiku-5-5, gpt-6-luna and gemini-3.8-flash (8-turn conversations, cold start, one customer per conversation), with results JSON and a chart.
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
+
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ashhadahsan/cachemaxxing/releases/tag/v0.1.0
