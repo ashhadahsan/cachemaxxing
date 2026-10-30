@@ -196,8 +196,10 @@ class Prompt:
             msgs.append({"role": "user", "content": final})
         return msgs
 
-    def anthropic(self, model: str, *, ttl: str = "5m") -> Json:
-        """kwargs for anthropic `client.messages.create(max_tokens=..., **kwargs)`."""
+    def anthropic(self, model: str, *, ttl: str = "5m", diagnose: bool | str = False) -> Json:
+        """kwargs for anthropic `client.messages.create(max_tokens=..., **kwargs)`.
+        diagnose=True opts in to Anthropic's cache diagnostics; pass the previous response's id on later turns
+        and usage(response).miss_reason says what changed (system_changed, tools_changed, ...)."""
         cc = _cc(_check_ttl("anthropic", ttl))
         kw: Json = {"model": model}
         if self._tools:
@@ -207,16 +209,30 @@ class Prompt:
             kw["system"] = [{"type": "text", "text": t} for t in self.static]
             kw["system"][-1]["cache_control"] = cc
         kw["messages"] = self._tail(cc, "cache_control", "text", ("user", "assistant"), only_text=False)
+        if diagnose:
+            kw["diagnostics"] = {"previous_message_id": diagnose if isinstance(diagnose, str) else None}
         return kw
 
-    def openai(self, model: str, *, ttl: str = "30m", cache_key: str | None = None) -> Json:
-        """kwargs for openai `client.responses.create(**kwargs)`."""
-        return self._openai(model, ttl, cache_key, field="input", role="developer", text_type="input_text")
+    def openai(
+        self, model: str, *, ttl: str = "30m", cache_key: str | None = None, diagnose: bool | str = False
+    ) -> Json:
+        """kwargs for openai `client.responses.create(**kwargs)`. diagnose=<previous response id> asks OpenAI
+        (GPT-5.6+) to compare with that response; usage(response).miss_reason then says why a cache missed."""
+        kw = self._openai(model, ttl, cache_key, field="input", role="developer", text_type="input_text")
+        if isinstance(diagnose, str):
+            if "prompt_cache_options" not in kw:
+                raise ValueError("prompt cache diagnostics need GPT-5.6 or later")
+            kw["prompt_cache_options"]["comparison_response_id"] = diagnose
+        return kw
 
-    def openai_chat(self, model: str, *, ttl: str = "30m", cache_key: str | None = None) -> Json:
+    def openai_chat(
+        self, model: str, *, ttl: str = "30m", cache_key: str | None = None, diagnose: bool | str = False
+    ) -> Json:
         """kwargs for openai `client.chat.completions.create(**kwargs)` and OpenAI-compatible servers."""
         if ttl == "12h":
             raise ValueError("the 12h cache TTL is Responses-only; use Prompt.openai()")
+        if isinstance(diagnose, str):
+            raise ValueError("prompt cache diagnostics are Responses-only; use Prompt.openai()")
         return self._openai(model, ttl, cache_key, field="messages", role="system", text_type="text")
 
     def _openai(self, model: str, ttl: str, cache_key: str | None, *, field: str, role: str, text_type: str) -> Json:

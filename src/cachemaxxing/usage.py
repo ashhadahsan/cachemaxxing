@@ -18,6 +18,7 @@ class Usage:
     cache_write: int = 0
     output: int = 0  # includes thinking / reasoning tokens
     est_cost: float | None = None  # USD at list price as of facts.VERIFIED; None for unknown models
+    miss_reason: str | None = None  # the provider's own verdict when diagnostics were requested
 
     @property
     def hit_rate(self) -> float:
@@ -32,6 +33,7 @@ class Usage:
             cache_write=self.cache_write + other.cache_write,
             output=self.output + other.output,
             est_cost=cost,
+            miss_reason=None,
         )
 
 
@@ -50,11 +52,28 @@ def _n(d: Any, *keys: str) -> int:
     return 0
 
 
+def _miss(d: dict[str, Any]) -> str | None:
+    """Anthropic `diagnostics.cache_miss_reason.type` or OpenAI `prompt_cache_diagnostics` reason, if any."""
+    diag = d.get("diagnostics")
+    if isinstance(diag, dict) and isinstance(diag.get("cache_miss_reason"), dict):
+        return str(diag["cache_miss_reason"].get("type") or "") or None
+    oc = d.get("prompt_cache_diagnostics")
+    if isinstance(oc, dict) and oc.get("type") not in (None, "cache_hit"):
+        return str(oc.get("reason") or oc.get("type"))
+    return None
+
+
 def usage(response: Any, model: str | None = None) -> Usage:
     """Normalize an Anthropic, OpenAI (Responses or Chat), Gemini, LiteLLM or LangChain AIMessage response."""
     d = plain(response)
     if not isinstance(d, dict):
         raise ValueError("unrecognised response: expected an SDK response object or dict")
+    u = _usage(d, model)
+    reason = _miss(d)
+    return replace(u, miss_reason=reason) if reason else u
+
+
+def _usage(d: dict[str, Any], model: str | None) -> Usage:
     name = str(model or d.get("model") or d.get("model_version") or d.get("modelVersion") or "")
     lc = d.get("usage_metadata")
     if isinstance(lc, dict) and "input_tokens" in lc:  # LangChain AIMessage: input_tokens includes cache tokens
@@ -128,10 +147,20 @@ class Stats:
     def __init__(self) -> None:
         self.calls: dict[str, int] = {}
         self.totals: dict[str, Usage] = {}
+        self.misses: dict[str, dict[str, int]] = {}  # provider-reported miss reasons per call site
 
     def add(self, call_site: str, u: Usage) -> None:
         self.calls[call_site] = self.calls.get(call_site, 0) + 1
-        self.totals[call_site] = self.totals[call_site] + u if call_site in self.totals else u
+        self.totals[call_site] = (
+            self.totals[call_site] + u if call_site in self.totals else replace(u, miss_reason=None)
+        )
+        if u.miss_reason:
+            counts = self.misses.setdefault(call_site, {})
+            counts[u.miss_reason] = counts.get(u.miss_reason, 0) + 1
+
+    def _note(self, site: str, note: str) -> str:
+        provider = _top(self.misses[site]) if self.misses.get(site) else ""
+        return " | ".join(n for n in (note, provider) if n)
 
     def table(self, notes: dict[str, str] | None = None) -> str:
         rows = [list(_HEADER)]
@@ -147,11 +176,16 @@ class Stats:
                     f"{u.cache_write:,}",
                     f"{u.output:,}",
                     cost,
-                    (notes or {}).get(site, ""),
+                    self._note(site, (notes or {}).get(site, "")),
                 ]
             )
         widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
         return "\n".join("  ".join(c.ljust(w) for c, w in zip(r, widths, strict=True)).rstrip() for r in rows)
+
+
+def _top(counts: dict[str, int]) -> str:
+    reason, n = max(counts.items(), key=lambda kv: kv[1])
+    return f"provider: {reason} x{n}"
 
 
 def record(call_site: str, request: Any, response: Any) -> dict[str, Any]:
