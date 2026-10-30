@@ -32,12 +32,14 @@ def _report(log: str, min_hit_rate: float | None) -> int:
         stats.add(site, u)
         if site in last:
             div = diff(last[site], rec["request"])
-            if div is None and u.cache_read == 0:
+            if (div is None or div.hint == "last turn") and u.cache_read == 0:
                 drift.setdefault(site, Counter())[NO_READ] += 1
             elif div is not None and div.hint != "last turn":
                 path = re.sub(r"\[\d+\]", "[]", div.path)  # group growing conversations together
                 drift.setdefault(site, Counter())[f"{path} ({div.hint or '?'})"] += 1
         last[site] = rec["request"]
+    if not stats.totals:
+        raise ValueError(f"no records in {log}")
     notes = {site: f"{key} x{n}" for site, c in drift.items() for key, n in c.most_common(1)}
     print(stats.table(notes))
     low = sorted(s for s, u in stats.totals.items() if min_hit_rate is not None and u.hit_rate < min_hit_rate)

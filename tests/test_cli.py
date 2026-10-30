@@ -37,7 +37,7 @@ def test_report_table_drift_and_gate(tmp_path: Path, capsys: pytest.CaptureFixtu
     log.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
     assert main(["report", str(log)]) == 0
     out = capsys.readouterr().out
-    assert "chat" in out and "system (timestamp) x2" in out and "faq" in out
+    assert "chat" in out and "system[].text (timestamp) x2" in out and "faq" in out
     assert main(["report", str(log), "--min-hit-rate", "0.5"]) == 1
     assert "chat" in capsys.readouterr().err
 
@@ -53,3 +53,21 @@ def test_report_flags_identical_prefix_without_cache_read(tmp_path: Path, capsys
 def test_bad_input_exits_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["diff", str(tmp_path / "missing.json"), str(tmp_path / "x.json")]) == 2
     assert "cachemaxxing:" in capsys.readouterr().err
+
+
+def test_single_turn_misses_and_bad_input(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    lines = [
+        record(
+            "qa", {"model": "m", "system": "S" * 100, "messages": [{"role": "user", "content": q}]}, anthropic_resp(0)
+        )
+        for q in ("a", "b", "c")
+    ]
+    log = tmp_path / "log.jsonl"
+    log.write_text("\n".join(json.dumps(x) for x in lines))
+    main(["report", str(log)])
+    assert "prefix ok, no cache read" in capsys.readouterr().out
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("")
+    assert main(["report", str(empty), "--min-hit-rate", "0.5"]) == 2
+    arr = write(tmp_path / "arr.json", [1, 2])
+    assert main(["diff", arr, arr]) == 2
