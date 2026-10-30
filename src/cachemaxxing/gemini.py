@@ -15,6 +15,8 @@ _MARGIN = 30.0  # seconds a cache must still live to be reused
 def _plan(
     p: Prompt, model: str, reuses: int, interval_s: float, tokens: int | None
 ) -> tuple[str, dict[str, Any]] | None:
+    if any(callable(t) for t in p._tools):  # python-function tools can't live in an explicit cache
+        return None
     d = should_cache(tokens or p.est_prefix_tokens(), reuses, "gemini", model, interval_s=interval_s)
     if not d.cache or d.ttl is None:
         return None
