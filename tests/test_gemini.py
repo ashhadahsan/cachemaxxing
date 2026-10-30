@@ -84,3 +84,13 @@ def test_async_twin() -> None:
     c = client()
     name = asyncio.run(gemini.gemini_cache_async(c, BIG, "gemini-3.8-flash", expected_reuses=20))
     assert name == "cachedContents/0"
+
+
+def test_function_tools_skip_explicit_cache() -> None:
+    def get_weather(city: str) -> str:
+        return city
+
+    c = client()
+    p = Prompt("site").tools([get_weather]).system("policy " * 8000)
+    assert gemini.gemini_cache(c, p, "gemini-3.8-flash", expected_reuses=20) is None
+    assert c.caches.created == []
