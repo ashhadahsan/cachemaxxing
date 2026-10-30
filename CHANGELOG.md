@@ -7,6 +7,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ### Added
 
 - Logo (`docs/assets/logo.svg`), used in the README and as the docs site's logo and favicon.
+- `cachemaxxing.langchain.CacheMiddleware` for LangChain 1.x / LangGraph agents: per-provider cache fields on every model call (OpenAI GPT-5.6+ breakpoints, Anthropic markers and automatic caching), usage per call site, and an `on_record` hook for `cachemaxxing report`. New extra: `cachemaxxing[langchain]`.
+- `examples/langchain_agent.py`.
+
+### Fixed
+
+- `usage()` on a LangChain `AIMessage` returned all zeros; it now reads `usage_metadata` for every provider integration.
 
 ## [0.1.0] - 2026-10-30
 
