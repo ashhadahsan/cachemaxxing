@@ -14,3 +14,5 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - `gemini_cache()` / `gemini_cache_async()`: create or reuse Gemini explicit caches only when they pay.
 - CLI: `cachemaxxing diff A B` and `cachemaxxing report LOG --min-hit-rate X`.
 - Provider facts table with sources, verified 2026-10-30.
+- Benchmarks: naive vs cachemaxxing on claude-haiku-5-5, gpt-6-luna and gemini-3.8-flash (8-turn conversations, cold start, one customer per conversation), with results JSON and a chart.
+- `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
