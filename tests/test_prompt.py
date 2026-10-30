@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from cachemaxxing.prompt import Prompt, openai_explicit
@@ -197,3 +199,63 @@ def test_litellm_gemini_implicit_unless_explicit_then_static_only() -> None:
 def test_litellm_unknown_route_is_plain() -> None:
     kw = Prompt().system("S").user("q").litellm("mistral/mistral-large")
     assert "cache" not in str(kw) and kw["model"] == "mistral/mistral-large"
+
+
+def test_stale_markers_in_history_do_not_pile_up() -> None:
+    hist: list[Any] = [{"role": "user", "content": "q0"}]
+    for i in range(4):
+        kw = Prompt().tools(TOOLS).system("S").history(hist).user(f"q{i + 1}").anthropic("claude-haiku-5-5")
+        assert str(kw).count("cache_control") <= 3
+        hist = [*kw["messages"], {"role": "assistant", "content": f"a{i}"}]
+    hist = []
+    for i in range(4):  # OpenAI 5.6+ keeps earlier breakpoints: they are its only read points (verified live)
+        kw = Prompt().system("S").history(hist).user(f"q{i}").openai("gpt-6-luna")
+        assert str(kw).count("prompt_cache_breakpoint") == i + 2
+        hist = [*kw["input"][1:], {"role": "assistant", "content": f"a{i}"}]
+    assert "prompt_cache_breakpoint" not in str(Prompt().history(hist).user("q").openai("gpt-5.5"))
+    claude_marked = [{"role": "user", "content": [{"type": "text", "text": "hi", "cache_control": CC}]}]
+    assert "cache_control" not in str(
+        Prompt().system("S").history(claude_marked).user("q").litellm("gemini/gemini-3.8-flash")
+    )
+
+
+def test_empty_parts_are_dropped() -> None:
+    kw = Prompt().system("S").context("").retrieved(["", "  "]).user("q").anthropic("m")
+    assert kw["system"] == [{"type": "text", "text": "S", "cache_control": CC}]
+    assert kw["messages"] == [{"role": "user", "content": [{"type": "text", "text": "q", "cache_control": CC}]}]
+    assert Prompt().user("  ")._user == []
+
+
+def test_ttls_are_validated_per_provider() -> None:
+    with pytest.raises(ValueError):
+        Prompt().user("q").anthropic("m", ttl="30m")
+    with pytest.raises(ValueError):
+        Prompt().user("q").openai("gpt-6-luna", ttl="1h")
+    with pytest.raises(ValueError):
+        Prompt().user("q").litellm("openai/gpt-6-luna", ttl="1h")
+    with pytest.raises(ValueError, match="explicit"):
+        Prompt().system("S").user("q").litellm("gemini/gemini-4-argon", explicit=True)
+
+
+def test_gemini_tool_objects_and_camel_case_are_sorted() -> None:
+    class Tool:
+        def model_dump(self, **kw: Any) -> dict[str, Any]:
+            return {"function_declarations": [{"name": "z"}, {"name": "a"}]}
+
+    assert [d["name"] for d in Prompt().tools([Tool()])._tools[0]["function_declarations"]] == ["a", "z"]
+    camel = Prompt().tools([{"functionDeclarations": [{"name": "z"}, {"name": "a"}]}])
+    assert [d["name"] for d in camel._tools[0]["functionDeclarations"]] == ["a", "z"]
+
+
+def test_python_function_tools_hash_stably() -> None:
+    def get_weather(city: str) -> str:
+        return city
+
+    a, b = Prompt().tools([get_weather]).system("S"), Prompt().tools([get_weather]).system("S")
+    assert a.prefix_hash() == b.prefix_hash() and a.est_prefix_tokens() > 0
+
+
+def test_litellm_stale_tool_markers_are_replaced() -> None:
+    stale = [{"type": "function", "function": {"name": "z", "parameters": {}, "cache_control": CC}}, *CHAT_TOOLS]
+    kw = Prompt().tools(stale).system("S").user("q").litellm("anthropic/claude-haiku-5-5")
+    assert str(kw["tools"]).count("cache_control") == 1 and "cache_control" in kw["tools"][-1]["function"]

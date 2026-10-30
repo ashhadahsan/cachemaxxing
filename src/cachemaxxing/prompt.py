@@ -21,8 +21,11 @@ def _parts(x: Parts) -> list[str]:
 
 
 def _sort_tool(t: Any) -> Any:
-    if isinstance(t, dict) and isinstance(t.get("function_declarations"), list):
-        return {**t, "function_declarations": sorted(t["function_declarations"], key=tool_name)}
+    t = plain(t)
+    if isinstance(t, dict):
+        for key in ("function_declarations", "functionDeclarations"):
+            if isinstance(t.get(key), list):
+                return {**t, key: sorted(t[key], key=tool_name)}
     return t
 
 
@@ -36,6 +39,36 @@ _LITELLM_ROUTES = {  # LiteLLM route prefixes that honour each provider's cache 
 
 def _cc(ttl: str) -> Json:
     return {"type": "ephemeral"} if ttl == "5m" else {"type": "ephemeral", "ttl": ttl}
+
+
+def _drop(t: Any, key: str) -> Any:
+    d = plain(t)
+    return {k: v for k, v in d.items() if k != key} if isinstance(d, dict) and key in d else t
+
+
+def _drop_fn(t: Any) -> Any:
+    """A LiteLLM tool without a stale cache_control inside its function object."""
+    d = plain(t)
+    if isinstance(d, dict) and isinstance(d.get("function"), dict) and "cache_control" in d["function"]:
+        return {**d, "function": _drop(d["function"], "cache_control")}
+    return t
+
+
+def _check_ttl(provider: str, ttl: str) -> str:
+    if ttl not in facts.PROVIDERS[provider].ttls:
+        raise ValueError(f"{provider} cache TTL must be one of {facts.PROVIDERS[provider].ttls}, not {ttl!r}")
+    return ttl
+
+
+def _unmark(msg: Any, key: str) -> Any:
+    """Copy of msg without `key` markers on its blocks. Markers aren't content; stale ones would pile up."""
+    m = plain(msg)
+    if not (isinstance(m, dict) and isinstance(m.get("content"), list)):
+        return msg
+    blocks = [plain(b) for b in m["content"]]
+    if not any(isinstance(b, dict) and key in b for b in blocks):
+        return msg
+    return {**m, "content": [{k: v for k, v in b.items() if k != key} if isinstance(b, dict) else b for b in blocks]}
 
 
 def openai_explicit(model: str) -> bool:
@@ -83,17 +116,17 @@ class Prompt:
         return self
 
     def system(self, text: Parts) -> Self:
-        self._system = [normalize_ws(t) for t in _parts(text)]
+        self._system = [t for t in map(normalize_ws, _parts(text)) if t]
         return self
 
     def context(self, docs: Parts, *, reorderable: bool = False) -> Self:
         """Static reference material. reorderable=True sorts the parts so their order can't drift."""
-        parts = [normalize_ws(t) for t in _parts(docs)]
+        parts = [t for t in map(normalize_ws, _parts(docs)) if t]
         self._context = sorted(parts) if reorderable else parts
         return self
 
     def examples(self, examples: Parts, *, reorderable: bool = False) -> Self:
-        parts = [normalize_ws(t) for t in _parts(examples)]
+        parts = [t for t in map(normalize_ws, _parts(examples)) if t]
         self._examples = sorted(parts) if reorderable else parts
         return self
 
@@ -104,11 +137,11 @@ class Prompt:
 
     def retrieved(self, chunks: Parts) -> Self:
         """Per-request context (RAG chunks, time, user profile). Placed after history, verbatim."""
-        self._retrieved = _parts(chunks)
+        self._retrieved = [t for t in _parts(chunks) if t.strip()]
         return self
 
     def user(self, text: str) -> Self:
-        self._user = [text]
+        self._user = [text] if text.strip() else []
         return self
 
     @property
@@ -116,7 +149,8 @@ class Prompt:
         return self._system + self._context + self._examples
 
     def _prefix_blob(self) -> str:
-        return canonical_json([[plain(t) for t in self._tools], self.static])
+        tools = [t.__qualname__ if callable(t) else plain(t) for t in self._tools]  # python-function tools: by name
+        return canonical_json([tools, self.static])
 
     def prefix_hash(self) -> str:
         """16 hex chars that change exactly when the tools or the static text change."""
@@ -127,11 +161,21 @@ class Prompt:
         return len(self._prefix_blob()) // 4
 
     def _tail(
-        self, marker: Json | None, key: str, text_type: str, roles: tuple[str, ...], *, only_text: bool
+        self,
+        marker: Json | None,
+        key: str,
+        text_type: str,
+        roles: tuple[str, ...],
+        *,
+        only_text: bool,
+        keep_old: bool = False,
     ) -> list[Any]:
         """History, then the final user turn, with one marker at the end of what the next request repeats:
         the final user block, or the end of history when a per-request retrieved block follows."""
-        msgs = list(self._history)
+        # Anthropic allows 4 markers, so stale ones are stripped; its 20-block lookback finds earlier entries anyway.
+        # OpenAI GPT-5.6+ only looks up at breakpoints present in the request, so earlier ones are kept (keep_old).
+        # ponytail: OpenAI checks the first 2 and latest 50 breakpoints; trim old ones if a hard cap ever appears
+        msgs = list(self._history) if keep_old else [_unmark(m, key) for m in self._history]
         final: list[Json] = [{"type": text_type, "text": t} for t in self._retrieved + self._user]
         if marker is not None:
             if final and not self._retrieved:
@@ -150,10 +194,11 @@ class Prompt:
 
     def anthropic(self, model: str, *, ttl: str = "5m") -> Json:
         """kwargs for anthropic `client.messages.create(max_tokens=..., **kwargs)`."""
-        cc = _cc(ttl)
+        cc = _cc(_check_ttl("anthropic", ttl))
         kw: Json = {"model": model}
         if self._tools:
-            kw["tools"] = [*self._tools[:-1], {**plain(self._tools[-1]), "cache_control": cc}]
+            tools = [_drop(t, "cache_control") for t in self._tools]
+            kw["tools"] = [*tools[:-1], {**plain(tools[-1]), "cache_control": cc}]
         if self.static:
             kw["system"] = [{"type": "text", "text": t} for t in self.static]
             kw["system"][-1]["cache_control"] = cc
@@ -172,6 +217,8 @@ class Prompt:
 
     def _openai(self, model: str, ttl: str, cache_key: str | None, *, field: str, role: str, text_type: str) -> Json:
         explicit = openai_explicit(model)
+        if explicit:
+            _check_ttl("openai", ttl)
         bp: Json | None = {"mode": "explicit"} if explicit else None
         kw: Json = {"model": model}
         if self._tools:
@@ -182,7 +229,8 @@ class Prompt:
             if bp is not None:
                 parts[-1]["prompt_cache_breakpoint"] = bp
             msgs.append({"role": role, "content": parts})
-        msgs += self._tail(bp, "prompt_cache_breakpoint", text_type, ("user", "developer", "system"), only_text=True)
+        roles = ("user", "developer", "system")
+        msgs += self._tail(bp, "prompt_cache_breakpoint", text_type, roles, only_text=True, keep_old=explicit)
         kw[field] = msgs
         if explicit:
             kw["prompt_cache_options"] = {"mode": "explicit", "ttl": ttl}
@@ -219,10 +267,13 @@ class Prompt:
             provider = "other"
         if provider == "openai":
             return self.openai_chat(model, ttl=ttl or "30m")
-        marker = _cc(ttl or "5m") if provider == "anthropic" or (provider == "gemini" and explicit) else None
+        if provider == "gemini" and explicit and (fm := facts.find(model)) is not None and fm.storage_hour is None:
+            raise ValueError(f"{model} has no explicit caching; drop explicit=True")
+        mark = provider == "anthropic" or (provider == "gemini" and explicit)
+        marker = _cc(_check_ttl("anthropic", ttl or "5m")) if mark else None
         kw: Json = {"model": model}
         if self._tools:
-            tools = list(self._tools)
+            tools = [_drop_fn(t) for t in self._tools]
             last = plain(tools[-1])
             if provider == "anthropic" and isinstance(last, dict) and isinstance(last.get("function"), dict):
                 tools[-1] = {**last, "function": {**last["function"], "cache_control": marker}}
