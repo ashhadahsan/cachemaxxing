@@ -25,7 +25,8 @@ u = usage(resp)
 print(f"{u.hit_rate:.0%} of input from cache, ~${u.est_cost or 0:.4f}")
 ```
 
-Works the same with `p.openai(...)`, `p.openai_chat(...)`, `p.gemini(...)` and `p.litellm(...)`. It is a thin library, not a proxy, and has zero runtime dependencies.
+A full multi-turn RAG chat lives in [`examples/rag_chat.py`](examples/rag_chat.py).
+The API works the same with `p.openai(...)`, `p.openai_chat(...)`, `p.gemini(...)` and `p.litellm(...)`. It is a thin library, not a proxy, and has zero runtime dependencies.
 
 ## Benchmark
 
