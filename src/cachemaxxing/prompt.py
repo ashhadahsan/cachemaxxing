@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Self
 
@@ -29,6 +30,12 @@ _NOT_MARKABLE = {"thinking", "redacted_thinking"}
 
 def _cc(ttl: str) -> Json:
     return {"type": "ephemeral"} if ttl == "5m" else {"type": "ephemeral", "ttl": ttl}
+
+
+def openai_explicit(model: str) -> bool:
+    """GPT-5.6 and later take explicit cache breakpoints; older models cache implicitly."""
+    m = re.search(r"gpt-(\d+)(?:\.(\d+))?", model)
+    return m is not None and (int(m[1]), int(m[2] or 0)) >= (5, 6)
 
 
 def _mark(msg: Any, key: str, marker: Json, text_type: str, only_text: bool) -> Any:
@@ -145,4 +152,34 @@ class Prompt:
             kw["system"] = [{"type": "text", "text": t} for t in self.static]
             kw["system"][-1]["cache_control"] = cc
         kw["messages"] = self._tail(cc, "cache_control", "text", ("user", "assistant"), only_text=False)
+        return kw
+
+    def openai(self, model: str, *, ttl: str = "30m", cache_key: str | None = None) -> Json:
+        """kwargs for openai `client.responses.create(**kwargs)`."""
+        return self._openai(model, ttl, cache_key, field="input", role="developer", text_type="input_text")
+
+    def openai_chat(self, model: str, *, ttl: str = "30m", cache_key: str | None = None) -> Json:
+        """kwargs for openai `client.chat.completions.create(**kwargs)` and OpenAI-compatible servers."""
+        if ttl == "12h":
+            raise ValueError("the 12h cache TTL is Responses-only; use Prompt.openai()")
+        return self._openai(model, ttl, cache_key, field="messages", role="system", text_type="text")
+
+    def _openai(self, model: str, ttl: str, cache_key: str | None, *, field: str, role: str, text_type: str) -> Json:
+        explicit = openai_explicit(model)
+        bp: Json | None = {"mode": "explicit"} if explicit else None
+        kw: Json = {"model": model}
+        if self._tools:
+            kw["tools"] = list(self._tools)
+        msgs: list[Any] = []
+        if self.static:
+            parts: list[Json] = [{"type": text_type, "text": t} for t in self.static]
+            if bp is not None:
+                parts[-1]["prompt_cache_breakpoint"] = bp
+            msgs.append({"role": role, "content": parts})
+        msgs += self._tail(bp, "prompt_cache_breakpoint", text_type, ("user", "developer", "system"), only_text=True)
+        kw[field] = msgs
+        if explicit:
+            kw["prompt_cache_options"] = {"mode": "explicit", "ttl": ttl}
+        if cache_key or not explicit:
+            kw["prompt_cache_key"] = cache_key or f"{self.call_site}:{self.prefix_hash()}"
         return kw

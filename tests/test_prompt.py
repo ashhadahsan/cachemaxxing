@@ -1,4 +1,6 @@
-from cachemaxxing.prompt import Prompt
+import pytest
+
+from cachemaxxing.prompt import Prompt, openai_explicit
 
 TOOLS = [
     {"name": "search", "description": "s", "input_schema": {"type": "object"}},
@@ -90,3 +92,50 @@ def test_history_never_mutated_and_at_most_three_markers() -> None:
 def test_question_already_in_history_gets_the_marker() -> None:
     kw = Prompt().system("S").history([*HIST, {"role": "user", "content": "q"}]).anthropic("m")
     assert kw["messages"][-1]["content"] == [{"type": "text", "text": "q", "cache_control": CC}]
+
+
+BP = {"mode": "explicit"}
+OAI_HIST = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]
+
+
+def test_responses_explicit_mode_on_gpt_5_6_plus() -> None:
+    kw = Prompt("support").system("S").history(OAI_HIST).user("q").openai("gpt-6-luna")
+    assert kw["prompt_cache_options"] == {"mode": "explicit", "ttl": "30m"}
+    assert "prompt_cache_key" not in kw
+    assert kw["input"][0] == {
+        "role": "developer",
+        "content": [{"type": "input_text", "text": "S", "prompt_cache_breakpoint": BP}],
+    }
+    assert kw["input"][-1] == {
+        "role": "user",
+        "content": [{"type": "input_text", "text": "q", "prompt_cache_breakpoint": BP}],
+    }
+
+
+def test_retrieved_marks_last_user_message_never_assistant() -> None:
+    kw = Prompt().system("S").history(OAI_HIST).retrieved("c").user("q").openai("gpt-6.1-sol")
+    assert kw["input"][1]["content"] == [{"type": "input_text", "text": "hi", "prompt_cache_breakpoint": BP}]
+    assert kw["input"][2] == {"role": "assistant", "content": "yo"}
+
+
+def test_legacy_models_get_prompt_cache_key_only() -> None:
+    p = Prompt("support").system("S").user("q")
+    kw = p.openai("gpt-5.5")
+    assert kw["prompt_cache_key"] == f"support:{p.prefix_hash()}"
+    assert "prompt_cache_options" not in kw and "prompt_cache_breakpoint" not in str(kw)
+
+
+def test_cache_key_override_and_chat_shape() -> None:
+    kw = Prompt().system("S").user("q").openai_chat("gpt-6-luna", cache_key="tenant-42")
+    assert kw["prompt_cache_key"] == "tenant-42"
+    assert kw["messages"][0] == {
+        "role": "system",
+        "content": [{"type": "text", "text": "S", "prompt_cache_breakpoint": BP}],
+    }
+    with pytest.raises(ValueError, match="Responses-only"):
+        Prompt().user("q").openai_chat("gpt-6-luna", ttl="12h")
+
+
+def test_openai_explicit_detection() -> None:
+    assert all(map(openai_explicit, ["gpt-5.6", "openai/gpt-6.1-sol", "gpt-6-luna-2026-09-01", "gpt-7"]))
+    assert not any(map(openai_explicit, ["gpt-5.5", "gpt-5", "gpt-4.1", "o3", "claude-x"]))
