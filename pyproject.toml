@@ -41,9 +41,16 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = ["pytest>=9.2", "ruff>=0.17.3", "mypy>=2.4.1", "anthropic>=2.3", "openai>=3.41", "google-genai>=2.34", "httpx>=0.28"]
+docs = [
+    "mkdocstrings-python>=2.0.10",
+    "zensical==0.0.73",
+]
 
 [tool.ruff]
 line-length = 120
+
+[tool.ruff.format]
+exclude = ["docs/*.md"]  # hand-aligned examples and --8<-- snippet includes
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

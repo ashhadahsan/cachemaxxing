@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from cachemaxxing import facts
 
 
@@ -27,3 +29,8 @@ def test_markdown_lists_every_model_and_the_date() -> None:
     md = facts.markdown()
     assert all(f"`{name}`" in md for name in facts.MODELS)
     assert facts.VERIFIED in md
+
+
+def test_docs_facts_table_is_current() -> None:
+    hint = "regenerate: uv run python -m cachemaxxing.facts > docs/_facts.md"
+    assert Path("docs/_facts.md").read_text(encoding="utf-8") == facts.markdown(), hint

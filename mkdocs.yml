@@ -1,0 +1,52 @@
+site_name: cachemaxxing
+site_description: Stop paying full price for the same tokens.
+site_url: https://ashhadahsan.github.io/cachemaxxing/
+repo_url: https://github.com/ashhadahsan/cachemaxxing
+repo_name: ashhadahsan/cachemaxxing
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.tabs.link
+    - navigation.footer
+    - navigation.instant
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: {icon: lucide/moon, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: {icon: lucide/sun, name: Switch to light mode}
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - How prompt caching works: caching.md
+  - Diagnosing a low hit rate: diagnosing.md
+  - API reference: reference.md
+  - How it compares: compare.md
+  - Changelog: changelog.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            members_order: source
+markdown_extensions:
+  - admonition
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets: {check_paths: true}
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed: {alternate_style: true}
+exclude_docs: |
+  _facts.md
