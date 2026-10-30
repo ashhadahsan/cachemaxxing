@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
 ### Added
 
 - Logo (`docs/assets/logo.svg`), used in the README and as the docs site's logo and favicon.
@@ -14,6 +16,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ### Fixed
 
 - `usage()` on a LangChain `AIMessage` returned all zeros; it now reads `usage_metadata` for every provider integration.
+- `diff` shows short values whole instead of a window cut mid-word.
 
 ## [0.1.0] - 2026-10-30
 
@@ -31,5 +34,6 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
 
-[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ashhadahsan/cachemaxxing/releases/tag/v0.1.0
