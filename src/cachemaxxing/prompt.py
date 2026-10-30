@@ -183,3 +183,22 @@ class Prompt:
         if cache_key or not explicit:
             kw["prompt_cache_key"] = cache_key or f"{self.call_site}:{self.prefix_hash()}"
         return kw
+
+    def gemini(self, model: str, *, cached_content: str | None = None) -> Json:
+        """kwargs for google-genai `client.models.generate_content(**kwargs)`. Implicit caching unless
+        cached_content (from gemini_cache) is given; then the cached fields are left out."""
+        config: Json = {"cached_content": cached_content} if cached_content else self.gemini_prefix()
+        contents = list(self._history)
+        final = [{"text": t} for t in self._retrieved + self._user]
+        if final:
+            contents.append({"role": "user", "parts": final})
+        return {"model": model, "contents": contents, "config": config}
+
+    def gemini_prefix(self) -> Json:
+        """The cacheable part of a Gemini request: what an explicit cache holds."""
+        prefix: Json = {}
+        if self.static:
+            prefix["system_instruction"] = {"parts": [{"text": t} for t in self.static]}
+        if self._tools:
+            prefix["tools"] = list(self._tools)
+        return prefix
