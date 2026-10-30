@@ -18,6 +18,8 @@ The library never writes files itself; `record()` just builds a JSON-serializabl
 
 ## 2. Find the call sites that miss
 
+Illustrative output (made-up numbers):
+
 ```console
 $ cachemaxxing report calls.jsonl
 call site       calls  hit rate  input    cache read  cache write  output  est $   top drift
@@ -31,7 +33,7 @@ search.rerank   48     91.4%     402,551  367,902     12,880       1,920   0.006
 
 ```console
 $ cachemaxxing diff request_41.json request_42.json
-diverges at system[0].text char 41 (timestamp), after ~10 matching tokens
+diverges at system[0].text char 41 (timestamp), after ~14 matching tokens
   a: 'You are helpful. Today is 2026-10-30T10:00:00Z.'
   b: 'You are helpful. Today is 2026-10-30T10:05:00Z.'
 ```
