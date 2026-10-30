@@ -68,11 +68,40 @@ Replay recorded traffic and fail the build when a call site regresses:
 $ cachemaxxing report calls.jsonl --min-hit-rate 0.6
 ```
 
-It exits 1 and names each call site below the threshold.
+It exits 1 and names each call site below the threshold. In GitHub Actions, use the bundled action. It also writes the table to the job summary:
 
-## Provider-side diagnostics
+```yaml
+- uses: ashhadahsan/cachemaxxing@v0.3.0
+  with:
+    log: calls.jsonl        # written with cachemaxxing.record()
+    min-hit-rate: "0.6"
+```
 
-- **Anthropic**: the cache-diagnostics beta (`cache-diagnosis-2026-04-07`, Claude API only) reports which part of a request changed against the previous one.
-- **OpenAI**: GPT-5.6+ prompt-cache diagnostics on the Responses API.
+## Ask the provider
 
-They work at the request level, online. `cachemaxxing diff` is offline, byte-level and the same for every provider, and works on logs you already have.
+Anthropic and OpenAI can compare a request with an earlier one and say why the cache missed. cachemaxxing requests that with `diagnose=` and puts the verdict in `usage(...).miss_reason`. `Stats` and `report` then show it next to their own drift column (`provider: system_changed x3`).
+
+```python
+r1 = client.messages.create(max_tokens=1024, **p.anthropic(model, diagnose=True))  # first turn: opt in
+r2 = client.messages.create(max_tokens=1024, **p2.anthropic(model, diagnose=r1.id))
+usage(r2).miss_reason   # None, or system_changed / tools_changed / messages_changed / model_changed / ...
+
+o2 = client.responses.create(**p.openai("gpt-6-luna", diagnose=o1.id))  # OpenAI GPT-5.6+, Responses API
+```
+
+- **Anthropic** (Claude API only, every current model): checked live on 2026-10-30. A timestamp added to the system prompt came back as `system_changed`, with 7,917 tokens of cacheable prefix lost.
+- **OpenAI**: cachemaxxing sends `prompt_cache_options.comparison_response_id` and reads `prompt_cache_diagnostics`. On 2026-10-30, every comparison on our test account came back `unavailable`, on `gpt-6-luna` and `gpt-6.1-sol`, in every cache mode, so the OpenAI reasons are not yet verified end to end.
+
+Provider diagnostics work per request, online. `cachemaxxing diff` is offline, byte-level and the same for every provider, and works on logs you already have. Use both.
+
+## Exact token counts
+
+`should_cache` and `gemini_cache` need the prefix size. The built-in estimate of ~4 characters per token undercounts: on our benchmark prompt it said 5,937 tokens, while Anthropic counted 9,998, OpenAI 6,280 and Gemini 7,141. Near a provider's minimum that flips the decision. Ask the provider instead, at one cheap call:
+
+```python
+from cachemaxxing.count import prefix_tokens
+tokens = prefix_tokens(client, p, model)       # anthropic, openai or google-genai client
+should_cache(tokens, expected_reuses=20, provider="anthropic", model=model)
+```
+
+`gemini_cache()` does this automatically, once per prefix.
