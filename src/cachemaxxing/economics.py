@@ -26,6 +26,8 @@ def should_cache(
     m = facts.find(model)
     if m is None or m.provider != provider:
         raise ValueError(f"unknown {provider} model {model!r}; add it to cachemaxxing.facts.MODELS")
+    if m.long_context and prefix_tokens > m.long_context[0]:
+        m = m.long_context[1]
     if prefix_tokens < m.min_tokens:
         return Decision(False, None, 0.0, f"{prefix_tokens} tokens is below the {m.min_tokens}-token minimum")
     t, n = prefix_tokens / 1e6, expected_reuses
