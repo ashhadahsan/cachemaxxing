@@ -24,6 +24,32 @@ def _sort_tool(t: Any) -> Any:
     return t
 
 
+_NOT_MARKABLE = {"thinking", "redacted_thinking"}
+
+
+def _cc(ttl: str) -> Json:
+    return {"type": "ephemeral"} if ttl == "5m" else {"type": "ephemeral", "ttl": ttl}
+
+
+def _mark(msg: Any, key: str, marker: Json, text_type: str, only_text: bool) -> Any:
+    """Copy of msg with `marker` on its last markable block, or None if it has none. Text never changes."""
+    m = dict(plain(msg))
+    content = m.get("content")
+    if isinstance(content, str):
+        m["content"] = [{"type": text_type, "text": content, key: marker}]
+        return m
+    if isinstance(content, list):
+        blocks = [plain(b) for b in content]
+        for i in range(len(blocks) - 1, -1, -1):
+            kind = blocks[i].get("type") if isinstance(blocks[i], dict) else None
+            ok = kind == text_type if only_text else kind is not None and kind not in _NOT_MARKABLE
+            if ok:
+                blocks[i] = {**blocks[i], key: marker}
+                m["content"] = blocks
+                return m
+    return None
+
+
 class Prompt:
     """Collect segments in any order; render with an adapter. Output order is fixed:
     tools, system, context, examples, history, retrieved, user."""
@@ -86,3 +112,37 @@ class Prompt:
     def est_prefix_tokens(self) -> int:
         # ponytail: ~4 chars/token estimate; pass exact counts to should_cache() when you have them
         return len(self._prefix_blob()) // 4
+
+    def _tail(
+        self, marker: Json | None, key: str, text_type: str, roles: tuple[str, ...], *, only_text: bool
+    ) -> list[Any]:
+        """History, then the final user turn, with one marker at the end of what the next request repeats:
+        the final user block, or the end of history when a per-request retrieved block follows."""
+        msgs = list(self._history)
+        final: list[Json] = [{"type": text_type, "text": t} for t in self._retrieved + self._user]
+        if marker is not None:
+            if final and not self._retrieved:
+                final[-1][key] = marker
+            else:
+                for i in range(len(msgs) - 1, -1, -1):
+                    m = plain(msgs[i])
+                    if isinstance(m, dict) and m.get("role") in roles:
+                        marked = _mark(m, key, marker, text_type, only_text)
+                        if marked is not None:
+                            msgs[i] = marked
+                            break
+        if final:
+            msgs.append({"role": "user", "content": final})
+        return msgs
+
+    def anthropic(self, model: str, *, ttl: str = "5m") -> Json:
+        """kwargs for anthropic `client.messages.create(max_tokens=..., **kwargs)`."""
+        cc = _cc(ttl)
+        kw: Json = {"model": model}
+        if self._tools:
+            kw["tools"] = [*self._tools[:-1], {**plain(self._tools[-1]), "cache_control": cc}]
+        if self.static:
+            kw["system"] = [{"type": "text", "text": t} for t in self.static]
+            kw["system"][-1]["cache_control"] = cc
+        kw["messages"] = self._tail(cc, "cache_control", "text", ("user", "assistant"), only_text=False)
+        return kw
