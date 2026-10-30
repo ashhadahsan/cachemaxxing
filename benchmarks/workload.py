@@ -21,12 +21,21 @@ from typing import Any
 from cachemaxxing import Usage
 
 DATA = Path(__file__).parent / "data"
-POLICY = (DATA / "policy.md").read_text(encoding="utf-8")
+RUN = uuid.uuid4().hex[:8]  # new static prefix per invocation, like a fresh deploy: every benchmark starts cold
+POLICY = f"Knowledge base build {RUN}.\n\n" + (DATA / "policy.md").read_text(encoding="utf-8")
 DOCS = (DATA / "docs.md").read_text(encoding="utf-8")
 TOOLS: list[dict[str, Any]] = json.loads((DATA / "tools.json").read_text())
 QUESTIONS: list[str] = json.loads((DATA / "questions.json").read_text())
 PROFILE = {"plan": "pro", "region": "eu", "seats": 12, "since": "2024-03-01"}
 HABITS = ["timestamp + request id atop system", "tool order varies", "JSON key order varies", "history re-rendered"]
+CUSTOMERS = ["Ana", "Ben", "Chen", "Dee", "Eli"]
+
+
+def questions(rep: int) -> list[str]:
+    """Each rep is a different customer's conversation: histories differ, only the static prefix is shared."""
+    qs = list(QUESTIONS)
+    qs[0] = f"Hi, this is {CUSTOMERS[rep % len(CUSTOMERS)]}. {qs[0]}"
+    return qs
 
 
 def volatile() -> str:
@@ -93,7 +102,12 @@ def write_results(provider: str, model: str, sdk: str, turns: int, arms: dict[st
         "date": datetime.now(UTC).date().isoformat(),
         "sdk": f"{sdk} {version(sdk)}",
         "cachemaxxing": version("cachemaxxing"),
-        "workload": {"turns": turns, "reps": len(next(iter(arms.values()))), "naive_habits": HABITS},
+        "workload": {
+            "turns": turns,
+            "conversations": len(next(iter(arms.values()))),
+            "note": "fresh static prefix per invocation (first conversation cold); one customer per conversation",
+            "naive_habits": HABITS,
+        },
         "arms": {name: summarize(runs) for name, runs in arms.items()},
     }
     out.write_text(json.dumps(doc, indent=2) + "\n")
