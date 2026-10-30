@@ -4,6 +4,16 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- `diagnose=` on `anthropic()` and `openai()` requests the provider's own cache-miss verdict (Anthropic cache diagnostics, OpenAI prompt-cache diagnostics). `usage(...).miss_reason` carries it, and `Stats` and `report` show it per call site.
+- `cachemaxxing.count.prefix_tokens()`: exact prefix token counts from the Anthropic, OpenAI or google-genai client.
+- GitHub Action (`uses: ashhadahsan/cachemaxxing@v0.3.0`): fails the job when a call site's hit rate drops below `min-hit-rate`, and writes the report to the job summary.
+
+### Changed
+
+- `gemini_cache()` counts the prefix exactly (once per prefix) instead of estimating at ~4 characters per token. On the benchmark prompt the estimate was 17% below Gemini's count (and 41% below Anthropic's).
+
 ## [0.2.0] - 2026-10-30
 
 ### Added
