@@ -1,0 +1,119 @@
+[
+  {
+    "name": "lookup_device",
+    "description": "Find a customer's registered device by the last 4 digits of its serial number.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "serial_last4": {
+          "type": "string",
+          "description": "Last 4 characters of the serial."
+        }
+      },
+      "required": [
+        "serial_last4"
+      ]
+    }
+  },
+  {
+    "name": "run_diagnostics",
+    "description": "Start remote diagnostics on a device and return a summary.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "speed",
+              "wifi",
+              "wan",
+              "mesh"
+            ]
+          }
+        }
+      },
+      "required": [
+        "device_id"
+      ]
+    }
+  },
+  {
+    "name": "get_firmware_status",
+    "description": "Current and latest firmware versions for a device.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "device_id"
+      ]
+    }
+  },
+  {
+    "name": "create_ticket",
+    "description": "Escalate to a human agent with a summary.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "normal",
+            "safety"
+          ]
+        }
+      },
+      "required": [
+        "summary",
+        "priority"
+      ]
+    }
+  },
+  {
+    "name": "check_warranty",
+    "description": "Warranty status and expiry for a device.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "device_id"
+      ]
+    }
+  },
+  {
+    "name": "search_articles",
+    "description": "Search the help-center articles.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+]
