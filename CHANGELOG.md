@@ -4,6 +4,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- Logo (`docs/assets/logo.svg`), used in the README and as the docs site's logo and favicon.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

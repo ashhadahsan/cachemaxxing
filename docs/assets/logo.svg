@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">cachemaxxing</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7d47"/>
+      <stop offset="1" stop-color="#e14d24"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#g)"/>
+  <!-- the stable prefix, cached and re-used on every call -->
+  <rect x="28" y="30" width="72" height="12" rx="6" fill="#fff"/>
+  <rect x="28" y="50" width="72" height="12" rx="6" fill="#fff"/>
+  <rect x="28" y="70" width="54" height="12" rx="6" fill="#fff"/>
+  <!-- the new turn: the only tokens paid at full price -->
+  <rect x="28" y="90" width="32" height="12" rx="6" fill="#fff" opacity="0.42"/>
+</svg>
