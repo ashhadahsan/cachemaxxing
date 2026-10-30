@@ -1,0 +1,110 @@
+from typing import Any
+
+import pytest
+
+from cachemaxxing.usage import usage
+
+
+def test_anthropic_input_excludes_cache_tokens_so_we_add_them() -> None:
+    r = {
+        "type": "message",
+        "model": "claude-haiku-5-5",
+        "usage": {
+            "input_tokens": 100,
+            "cache_creation_input_tokens": 1000,
+            "cache_read_input_tokens": 9000,
+            "output_tokens": 50,
+            "cache_creation": {"ephemeral_5m_input_tokens": 1000, "ephemeral_1h_input_tokens": 0},
+        },
+    }
+    u = usage(r)
+    assert (u.provider, u.input, u.cache_read, u.cache_write, u.output) == ("anthropic", 10100, 9000, 1000, 50)
+    assert u.hit_rate == pytest.approx(9000 / 10100)
+    assert u.est_cost == pytest.approx((100 * 0.10 + 9000 * 0.01 + 1000 * 0.125 + 50 * 0.50) / 1e6)
+
+
+def test_openai_responses_docs_example_with_both_ttls() -> None:
+    r = {
+        "object": "response",
+        "model": "gpt-6-luna",
+        "usage": {
+            "input_tokens": 12000,
+            "output_tokens": 10,
+            "input_tokens_details": {
+                "cached_tokens": 4000,
+                "cache_write_tokens": 7000,
+                "cache_write_tokens_details": {"ttl_30m_tokens": 3000, "ttl_12h_tokens": 4000},
+            },
+        },
+    }
+    u = usage(r)
+    assert (u.input, u.cache_read, u.cache_write) == (12000, 4000, 7000)
+    assert u.est_cost == pytest.approx((1000 * 0.10 + 4000 * 0.01 + 3000 * 0.125 + 4000 * 0.25 + 10 * 0.50) / 1e6)
+
+
+def test_openai_chat() -> None:
+    r = {
+        "object": "chat.completion",
+        "model": "gpt-6-luna",
+        "usage": {"prompt_tokens": 2000, "completion_tokens": 5, "prompt_tokens_details": {"cached_tokens": 1024}},
+    }
+    assert (usage(r).input, usage(r).cache_read, usage(r).provider) == (2000, 1024, "openai")
+
+
+def test_gemini_snake_and_camel_case_agree_and_thoughts_count_as_output() -> None:
+    snake = {
+        "model_version": "gemini-3.8-flash",
+        "candidates": [],
+        "usage_metadata": {
+            "prompt_token_count": 5000,
+            "cached_content_token_count": 4096,
+            "candidates_token_count": 20,
+            "thoughts_token_count": 30,
+        },
+    }
+    camel = {
+        "modelVersion": "gemini-3.8-flash",
+        "usageMetadata": {
+            "promptTokenCount": 5000,
+            "cachedContentTokenCount": 4096,
+            "candidatesTokenCount": 20,
+            "thoughtsTokenCount": 30,
+        },
+    }
+    assert usage(snake) == usage(camel)
+    assert (usage(snake).output, usage(snake).cache_read) == (50, 4096)
+
+
+def test_litellm_claude_response() -> None:
+    r = {
+        "object": "chat.completion",
+        "model": "claude-haiku-5-5",
+        "usage": {
+            "prompt_tokens": 10100,
+            "completion_tokens": 50,
+            "prompt_tokens_details": {"cached_tokens": 9000, "cache_creation_tokens": 1000},
+            "cache_creation_input_tokens": 1000,
+            "cache_read_input_tokens": 9000,
+        },
+    }
+    u = usage(r)
+    assert (u.provider, u.input, u.cache_read, u.cache_write) == ("anthropic", 10100, 9000, 1000)
+
+
+def test_long_context_tier_prices_the_whole_request() -> None:
+    r = {"type": "message", "model": "claude-haiku-5-5", "usage": {"input_tokens": 150_000, "output_tokens": 0}}
+    assert usage(r).est_cost == pytest.approx(150_000 * 0.50 / 1e6)
+
+
+def test_unknown_model_has_no_cost_and_unknown_shape_raises() -> None:
+    assert usage({"type": "message", "model": "x", "usage": {"input_tokens": 1}}).est_cost is None
+    with pytest.raises(ValueError):
+        usage({"foo": 1})
+
+
+def test_sdk_objects_and_model_override() -> None:
+    class Resp:
+        def model_dump(self, **kw: Any) -> dict[str, Any]:
+            return {"type": "message", "model": "x", "usage": {"input_tokens": 10, "output_tokens": 0}}
+
+    assert usage(Resp(), model="claude-haiku-5-5").est_cost == pytest.approx(10 * 0.10 / 1e6)
