@@ -147,13 +147,13 @@ from cachemaxxing import Prompt, usage, diff, should_cache, Stats, record, gemin
 p = Prompt(call_site="support.answer")
 p.tools(TOOLS).system(SYSTEM).context(DOCS).history(messages).retrieved(chunks).user(question)
 
-resp = client.messages.create(max_tokens=1024, **p.anthropic("claude-haiku-5-5"))      # Anthropic
-resp = client.responses.create(**p.openai("gpt-6-luna"))                                # OpenAI Responses
-resp = client.chat.completions.create(**p.openai_chat("gpt-6-luna"))                    # OpenAI Chat
-resp = client.models.generate_content(**p.gemini("gemini-3.8-flash"))                   # Gemini
-resp = litellm.completion(max_tokens=1024, **p.litellm("anthropic/claude-haiku-5-5"))   # LiteLLM
+resp = client.messages.create(max_tokens=1024, **p.anthropic("claude-haiku-5-5"))  # Anthropic
+resp = client.responses.create(**p.openai("gpt-6-luna"))  # OpenAI Responses
+resp = client.chat.completions.create(**p.openai_chat("gpt-6-luna"))  # OpenAI Chat
+resp = client.models.generate_content(**p.gemini("gemini-3.8-flash"))  # Gemini
+resp = litellm.completion(max_tokens=1024, **p.litellm("anthropic/claude-haiku-5-5"))  # LiteLLM
 
-u = usage(resp)        # u.input, u.cache_read, u.cache_write, u.output, u.est_cost, u.hit_rate
+u = usage(resp)  # u.input, u.cache_read, u.cache_write, u.output, u.est_cost, u.hit_rate
 log.write(json.dumps(record("support.answer", kwargs, resp)) + "\n")
 # $ cachemaxxing report log.jsonl --min-hit-rate 0.6     $ cachemaxxing diff a.json b.json
 ```
