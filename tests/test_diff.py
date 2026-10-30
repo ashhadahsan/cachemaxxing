@@ -90,3 +90,11 @@ def test_gemini_camel_case_config_and_system_string_forms() -> None:
 def test_non_object_input_raises() -> None:
     with pytest.raises(ValueError):
         diff([1, 2], BASE)
+
+
+def test_context_shows_short_values_whole_and_long_ones_windowed() -> None:
+    d = diff(w(system="You are helpful. Now: 10:00:00"), w(system="You are helpful. Now: 10:05:00"))
+    assert d is not None and d.a == "You are helpful. Now: 10:00:00"
+    long_a, long_b = "x" * 200 + "A" + "y" * 200, "x" * 200 + "B" + "y" * 200
+    d = diff(w(system=long_a), w(system=long_b))
+    assert d is not None and d.offset == 200 and len(d.a) == 80 and d.a[40] == "A"
