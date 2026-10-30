@@ -5,23 +5,42 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from .count import prefix_tokens as _count
+from .count import prefix_tokens_async as _acount
 from .economics import should_cache
 from .prompt import Prompt
 
 _LIVE: dict[str, tuple[str, float]] = {}  # ponytail: per-process memo; other processes match on display_name
 _MARGIN = 30.0  # seconds a cache must still live to be reused
+_TOKENS: dict[str, int] = {}  # exact prefix counts, by model + prefix hash
 
 
-def _plan(
-    p: Prompt, model: str, reuses: int, interval_s: float, tokens: int | None
-) -> tuple[str, dict[str, Any]] | None:
-    if any(callable(t) for t in p._tools):  # python-function tools can't live in an explicit cache
-        return None
-    d = should_cache(tokens or p.est_prefix_tokens(), reuses, "gemini", model, interval_s=interval_s)
+def _plan(p: Prompt, model: str, reuses: int, interval_s: float, tokens: int) -> tuple[str, dict[str, Any]] | None:
+    d = should_cache(tokens, reuses, "gemini", model, interval_s=interval_s)
     if not d.cache or d.ttl is None:
         return None
     key = f"cmx-{p.call_site}-{model.rsplit('/', 1)[-1]}-{p.prefix_hash()}"
     return key, {"display_name": key, "ttl": d.ttl, **p.gemini_prefix()}
+
+
+def _tokens(client: Any, p: Prompt, model: str) -> int:
+    key = f"{model}:{p.prefix_hash()}"
+    if key not in _TOKENS:
+        try:
+            _TOKENS[key] = _count(client, p, model)
+        except Exception:  # counting is only an optimization; fall back to the estimate
+            return p.est_prefix_tokens()
+    return _TOKENS[key]
+
+
+async def _atokens(client: Any, p: Prompt, model: str) -> int:
+    key = f"{model}:{p.prefix_hash()}"
+    if key not in _TOKENS:
+        try:
+            _TOKENS[key] = await _acount(client, p, model)
+        except Exception:
+            return p.est_prefix_tokens()
+    return _TOKENS[key]
 
 
 def _alive(c: Any, key: str) -> bool:
@@ -49,8 +68,12 @@ def gemini_cache(
     prefix_tokens: int | None = None,
 ) -> str | None:
     """Name of a live explicit cache holding p's static prefix, created only if should_cache() says it pays.
-    Use it as p.gemini(model, cached_content=name). None means stay on implicit caching."""
-    plan = _plan(p, model, expected_reuses, interval_s, prefix_tokens)
+    Use it as p.gemini(model, cached_content=name). None means stay on implicit caching.
+    The prefix is counted exactly with client.models.count_tokens (once per prefix) unless prefix_tokens is given."""
+    if any(callable(t) for t in p._tools):  # python-function tools can't live in an explicit cache
+        return None
+    tokens = prefix_tokens or _tokens(client, p, model)
+    plan = _plan(p, model, expected_reuses, interval_s, tokens)
     if plan is None:
         return None
     key, config = plan
@@ -72,7 +95,10 @@ async def gemini_cache_async(
     prefix_tokens: int | None = None,
 ) -> str | None:
     """Async twin of gemini_cache, using client.aio."""
-    plan = _plan(p, model, expected_reuses, interval_s, prefix_tokens)
+    if any(callable(t) for t in p._tools):
+        return None
+    tokens = prefix_tokens or await _atokens(client, p, model)
+    plan = _plan(p, model, expected_reuses, interval_s, tokens)
     if plan is None:
         return None
     key, config = plan
