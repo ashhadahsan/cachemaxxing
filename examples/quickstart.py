@@ -25,9 +25,10 @@ def ask(provider: str, question: str) -> Any:
     if provider == "gemini":
         from google import genai
 
+        client = genai.Client()  # keep a reference: a temporary Client closes its connection when collected
         kw = p.gemini("gemini-3.8-flash")
         kw["config"]["max_output_tokens"] = 64
-        return genai.Client().models.generate_content(**kw)
+        return client.models.generate_content(**kw)
     import litellm  # pip install "cachemaxxing[litellm]"
 
     return litellm.completion(max_tokens=64, **p.litellm("gemini/gemini-3.8-flash"))
