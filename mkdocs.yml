@@ -5,6 +5,8 @@ repo_url: https://github.com/ashhadahsan/cachemaxxing
 repo_name: ashhadahsan/cachemaxxing
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   features:
     - content.code.copy
     - content.tabs.link

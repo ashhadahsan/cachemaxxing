@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/ashhadahsan/cachemaxxing/main/docs/assets/logo.svg" width="88" alt="cachemaxxing logo" align="right">
+
 # cachemaxxing
 
 [![PyPI](https://img.shields.io/pypi/v/cachemaxxing)](https://pypi.org/project/cachemaxxing/)
