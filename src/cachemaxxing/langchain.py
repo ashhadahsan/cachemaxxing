@@ -24,7 +24,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
-from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, convert_to_messages
+from langchain_core.runnables import Runnable, RunnableConfig
 
 from .canon import canonical_json, jsonable
 from .prompt import _cc, _check_ttl, openai_explicit
@@ -76,6 +77,34 @@ def _ai(result: Any) -> AIMessage | None:
     response = getattr(result, "model_response", result)  # ExtendedModelResponse wraps a ModelResponse
     messages: list[BaseMessage] = getattr(response, "result", None) or []
     return next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+
+
+def _bound_tools(model: Any) -> list[Any]:
+    return list(getattr(model, "kwargs", {}).get("tools") or [])  # tools given to bind_tools()
+
+
+def _record_call(
+    stats: Stats,
+    call_site: str,
+    on_record: Callable[[dict[str, Any]], None] | None,
+    model: Any,
+    system: SystemMessage | None,
+    tools: Sequence[Any],
+    messages: Sequence[BaseMessage],
+    result: Any,
+) -> None:
+    ai = _ai(result)
+    if ai is None or not ai.usage_metadata:
+        return
+    stats.add(call_site, usage(ai))
+    if on_record:
+        sent = {
+            "model": _provider(model)[1],
+            "tools": [_tool_name(t) for t in tools],
+            "system": jsonable(system.content) if system else "",
+            "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in messages],
+        }
+        on_record(record(call_site, sent, ai))
 
 
 def cache_fields(
@@ -132,18 +161,17 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         return request.override(system_message=system, model_settings={**extra, **(request.model_settings or {})})
 
     def _measure(self, request: ModelRequest[Any], result: Any) -> None:
-        ai = _ai(result)
-        if ai is None or not ai.usage_metadata:
-            return
-        self.stats.add(self.call_site, usage(ai))
-        if self.on_record:
-            sent = {
-                "model": _provider(request.model)[1],
-                "tools": [_tool_name(t) for t in request.tools or []],
-                "system": jsonable(request.system_message.content) if request.system_message else "",
-                "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in request.messages],
-            }
-            self.on_record(record(self.call_site, sent, ai))
+        tools = request.tools or []
+        _record_call(
+            self.stats,
+            self.call_site,
+            self.on_record,
+            request.model,
+            request.system_message,
+            tools,
+            request.messages,
+            result,
+        )
 
     def wrap_model_call(
         self, request: ModelRequest[Any], handler: Callable[[ModelRequest[Any]], ModelResponse[Any]]
@@ -162,4 +190,49 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         return result
 
 
-__all__ = ["CacheMiddleware", "cache_fields"]
+class CachedModel(Runnable[Any, BaseMessage]):
+    """Wrap a LangChain chat model (bind_tools() included) so every call gets the right cache fields and is
+    measured, for hand-built LangGraph nodes and LCEL chains. (For create_agent, use CacheMiddleware.)
+
+        llm = CachedModel(init_chat_model("openai:gpt-6-luna").bind_tools(tools), system=SYSTEM, call_site="graph")
+        ai = llm.invoke(state["messages"])     # in a node; llm.stats has hit rate and $ per call site
+
+    A leading SystemMessage in the input is used as is (and marked); otherwise `system` is prepended."""
+
+    def __init__(
+        self,
+        model: Runnable[Any, Any],
+        *,
+        system: SystemMessage | str | None = None,
+        call_site: str = "graph",
+        ttl: str | None = None,
+        on_record: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
+        self.model, self.call_site, self.ttl, self.on_record = model, call_site, ttl, on_record
+        self.system = SystemMessage(content=system) if isinstance(system, str) else system
+        self.stats = Stats()
+        self._tools = _bound_tools(model)
+        _, extra = cache_fields(model, None, call_site=call_site, ttl=ttl, tools=self._tools)
+        self._bound = model.bind(**extra) if extra else model
+
+    def _messages(self, input: Any) -> list[BaseMessage]:
+        raw = input.to_messages() if hasattr(input, "to_messages") else [input] if isinstance(input, str) else input
+        msgs = convert_to_messages(raw)
+        system, rest = (msgs[0], msgs[1:]) if msgs and isinstance(msgs[0], SystemMessage) else (self.system, msgs)
+        marked, _ = cache_fields(self.model, system, call_site=self.call_site, ttl=self.ttl, tools=self._tools)
+        return [marked, *rest] if marked is not None else list(rest)
+
+    def invoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> BaseMessage:
+        messages = self._messages(input)
+        result = self._bound.invoke(messages, config, **kwargs)
+        _record_call(self.stats, self.call_site, self.on_record, self.model, None, self._tools, messages, result)
+        return result  # type: ignore[no-any-return]
+
+    async def ainvoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> BaseMessage:
+        messages = self._messages(input)
+        result = await self._bound.ainvoke(messages, config, **kwargs)
+        _record_call(self.stats, self.call_site, self.on_record, self.model, None, self._tools, messages, result)
+        return result  # type: ignore[no-any-return]
+
+
+__all__ = ["CacheMiddleware", "CachedModel", "cache_fields"]
