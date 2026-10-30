@@ -1,5 +1,7 @@
 from typing import Any
 
+import pytest
+
 from cachemaxxing.diff import Divergence, diff
 
 SYS = "You are helpful. Today is 2026-10-30T10:00:00Z."
@@ -64,9 +66,27 @@ def test_gemini_config_counts_only_prefix_fields() -> None:
     a = {"model": "g", "contents": [], "config": {"system_instruction": "S", "temperature": 0}}
     assert diff(a, {**a, "config": {"system_instruction": "S", "temperature": 1}}) is None
     d = diff(a, {**a, "config": {"system_instruction": "S2"}})
-    assert d is not None and d.path == "config.system_instruction"
+    assert d is not None and d.path == "config.system_instruction.parts[0].text"
 
 
 def test_str_is_readable() -> None:
     d = diff(BASE, w(system=[{"type": "text", "text": SYS.replace("10:00", "10:05")}]))
     assert "system[0].text" in str(d) and "(timestamp)" in str(d)
+
+
+def test_insertions_are_not_key_order() -> None:
+    d = diff(w(tools=[{"name": "a"}]), w(tools=[{"name": "a"}, {"name": "c"}]))
+    assert d is not None and d.hint != "key order"
+
+
+def test_gemini_camel_case_config_and_system_string_forms() -> None:
+    a = {"model": "g", "config": {"systemInstruction": "Now 10:00"}}
+    assert diff(a, {"model": "g", "config": {"systemInstruction": "Now 10:05"}}) is not None
+    assert diff({"model": "m", "system": "S"}, {"model": "m", "system": [{"type": "text", "text": "S"}]}) is None
+    g = {"model": "g", "config": {"system_instruction": "S"}}
+    assert diff(g, {"model": "g", "config": {"system_instruction": {"parts": [{"text": "S"}]}}}) is None
+
+
+def test_non_object_input_raises() -> None:
+    with pytest.raises(ValueError):
+        diff([1, 2], BASE)

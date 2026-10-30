@@ -55,8 +55,14 @@ def _leaves(x: Any, path: str) -> Iterator[tuple[str, str]]:
         yield path, x if isinstance(x, str) else json.dumps(x)
 
 
+def _snake(key: str) -> str:
+    return re.sub(r"(?<!^)([A-Z])", r"_\1", key).lower()
+
+
 def _request(r: Any) -> dict[str, Any]:
     r = jsonable(r)
+    if not isinstance(r, dict):
+        raise ValueError("expected a request object (a JSON dict) or a record() line")
     inner = r.get("request")
     return inner if isinstance(inner, dict) else r
 
@@ -66,8 +72,13 @@ def _flat(req: dict[str, Any]) -> list[tuple[str, str]]:
     for k in _ORDER:
         if k in req:
             v = req[k]
-            if k == "config" and isinstance(v, dict):
-                v = {c: v[c] for c in _GEMINI_PREFIX if c in v}
+            if k == "config" and isinstance(v, dict):  # google-genai accepts camelCase keys too
+                snake = {_snake(key): x for key, x in v.items()}
+                v = {c: snake[c] for c in _GEMINI_PREFIX if c in snake}
+                if isinstance(v.get("system_instruction"), str):
+                    v["system_instruction"] = {"parts": [{"text": v["system_instruction"]}]}
+            elif k == "system" and isinstance(v, str):  # "S" renders like [{"type": "text", "text": "S"}]
+                v = [{"type": "text", "text": v}]
             out += _leaves(v, k)
     return out
 
@@ -84,7 +95,9 @@ def diff(a: Any, b: Any) -> Divergence | None:
         pb, vb = fb[i]
         if pa != pb:
             parent = pa.rsplit(".", 1)[0]
-            same = {x for x in fa if x[0].startswith(parent)} == {x for x in fb if x[0].startswith(parent)}
+            same = pb.rsplit(".", 1)[0] == parent and {x for x in fa if x[0].startswith(parent)} == {
+                x for x in fb if x[0].startswith(parent)
+            }
             return Divergence(f"{pa} / {pb}", 0, va[:60], vb[:60], "key order" if same else None, seen)
         if va != vb:
             off = len(os.path.commonprefix([va, vb]))
