@@ -30,3 +30,15 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with: {version: "0.13.6"}
       - run: uv run --locked --group docs zensical build --clean
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./
+        with: {log: tests/fixtures/report.jsonl, min-hit-rate: "0.5"}
+      - id: gate
+        uses: ./
+        continue-on-error: true
+        with: {log: tests/fixtures/report.jsonl, min-hit-rate: "0.99"}
+      - name: the gate must fail below the threshold
+        run: test "${{ steps.gate.outcome }}" = "failure"
