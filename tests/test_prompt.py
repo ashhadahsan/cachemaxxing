@@ -139,3 +139,28 @@ def test_cache_key_override_and_chat_shape() -> None:
 def test_openai_explicit_detection() -> None:
     assert all(map(openai_explicit, ["gpt-5.6", "openai/gpt-6.1-sol", "gpt-6-luna-2026-09-01", "gpt-7"]))
     assert not any(map(openai_explicit, ["gpt-5.5", "gpt-5", "gpt-4.1", "o3", "claude-x"]))
+
+
+GTOOLS = [{"function_declarations": [{"name": "f", "description": "d"}]}]
+
+
+def test_gemini_implicit_layout() -> None:
+    kw = (
+        Prompt()
+        .tools(GTOOLS)
+        .system("S")
+        .context("D")
+        .history([{"role": "user", "parts": [{"text": "hi"}]}])
+        .retrieved("c")
+        .user("q")
+        .gemini("gemini-3.8-flash")
+    )
+    assert kw["model"] == "gemini-3.8-flash"
+    assert kw["config"] == {"system_instruction": {"parts": [{"text": "S"}, {"text": "D"}]}, "tools": GTOOLS}
+    assert kw["contents"][-1] == {"role": "user", "parts": [{"text": "c"}, {"text": "q"}]}
+    assert "cache_control" not in str(kw)
+
+
+def test_gemini_cached_content_omits_what_the_cache_holds() -> None:
+    kw = Prompt().tools(GTOOLS).system("S").user("q").gemini("gemini-3.8-flash", cached_content="cachedContents/1")
+    assert kw["config"] == {"cached_content": "cachedContents/1"}
