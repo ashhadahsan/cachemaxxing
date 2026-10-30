@@ -1,0 +1,19 @@
+# secrets and local-only files
+.env
+.env.*
+HANDOFF.md
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+wheels/
+*.egg-info
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# docs build
+site/
