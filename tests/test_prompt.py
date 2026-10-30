@@ -164,3 +164,36 @@ def test_gemini_implicit_layout() -> None:
 def test_gemini_cached_content_omits_what_the_cache_holds() -> None:
     kw = Prompt().tools(GTOOLS).system("S").user("q").gemini("gemini-3.8-flash", cached_content="cachedContents/1")
     assert kw["config"] == {"cached_content": "cachedContents/1"}
+
+
+CHAT_TOOLS = [
+    {"type": "function", "function": {"name": "b", "parameters": {}}},
+    {"type": "function", "function": {"name": "a", "parameters": {}}},
+]
+
+
+def test_litellm_claude_markers_in_openai_format() -> None:
+    kw = Prompt().tools(CHAT_TOOLS).system("S").user("q").litellm("anthropic/claude-haiku-5-5")
+    assert kw["model"] == "anthropic/claude-haiku-5-5"
+    assert [t["function"]["name"] for t in kw["tools"]] == ["a", "b"]
+    assert kw["tools"][-1]["function"]["cache_control"] == CC
+    assert kw["messages"][0] == {"role": "system", "content": [{"type": "text", "text": "S", "cache_control": CC}]}
+    assert kw["messages"][-1]["content"][-1]["cache_control"] == CC
+
+
+def test_litellm_openai_route_equals_openai_chat() -> None:
+    p = Prompt("x").system("S").user("q")
+    assert p.litellm("openai/gpt-6-luna") == p.openai_chat("openai/gpt-6-luna")
+
+
+def test_litellm_gemini_implicit_unless_explicit_then_static_only() -> None:
+    p = Prompt().system("S").history([{"role": "user", "content": "hi"}]).user("q")
+    assert "cache_control" not in str(p.litellm("gemini/gemini-3.8-flash"))
+    kw = p.litellm("gemini/gemini-3.8-flash", explicit=True)
+    assert kw["messages"][0]["content"][-1]["cache_control"] == CC
+    assert "cache_control" not in str(kw["messages"][1:])
+
+
+def test_litellm_unknown_route_is_plain() -> None:
+    kw = Prompt().system("S").user("q").litellm("mistral/mistral-large")
+    assert "cache" not in str(kw) and kw["model"] == "mistral/mistral-large"
