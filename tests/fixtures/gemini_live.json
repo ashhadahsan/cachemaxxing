@@ -1,0 +1,39 @@
+{
+ "candidates": [
+  {
+   "content": {
+    "parts": [
+     {
+      "text": "To reset",
+      "thought_signature": "EtECCs4CAWkUfRM3krgo50FTQ8491Eqwi1ljzP8MK3yXDy8j1sPMAhSrcdYC6l2sRY65ax0G0IieR7KPUWm2bnmlhg0YJL7uJvOpYDApsUA1yjLQqh53JBcJwAFOey9AeFgen0_8vaDpromdR0CMTcNBjFUV2PClgXiCxX8BNlMwFNIW-k4BCVoJrnlKoC026ZahkwmDVsVAZG6IHa0RQtIhu-AI-ner_NcDfZNfc1BLb_W54UisCEpoigCjladNR105dO2uxP69Wr79sAaKsINO078fRxQs_pRgwitJiQme3kQp_JuA8aAW73AAyLi73Ka4X2L-T0ZlHa5SlQXr7STA_HOfaW-FLdCP1H_oqfuoAM_AEzQmVg8FVl4nrYC29u8amvMsxGi3LtpW53Dt7aJ_0CrC3Rgcc51P7AzzP04DW6_dE2-L3-MR_WTodjpzLV7VIQ=="
+     }
+    ],
+    "role": "model"
+   },
+   "finish_reason": "MAX_TOKENS",
+   "index": 0
+  }
+ ],
+ "model_version": "gemini-3.8-flash",
+ "response_id": "DADlauIR3OOewQ_JyIWAAQ",
+ "usage_metadata": {
+  "cache_tokens_details": [
+   {
+    "modality": "TEXT",
+    "token_count": 5099
+   }
+  ],
+  "cached_content_token_count": 5099,
+  "candidates_token_count": 2,
+  "prompt_token_count": 7144,
+  "prompt_tokens_details": [
+   {
+    "modality": "TEXT",
+    "token_count": 7144
+   }
+  ],
+  "thoughts_token_count": 58,
+  "total_token_count": 7204
+ },
+ "automatic_function_calling_history": []
+}

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -134,3 +135,10 @@ def test_record_is_json_serializable() -> None:
         "request": {"messages": [{"type": "message"}]},
         "response": {"type": "message"},
     }
+
+
+def test_recorded_live_gemini_response() -> None:
+    live = json.loads((Path(__file__).parent / "fixtures" / "gemini_live.json").read_text())
+    u = usage(live)
+    assert (u.provider, u.model) == ("gemini", live["model_version"])
+    assert (u.input, u.cache_read) == (7144, 5099) and u.est_cost is not None
