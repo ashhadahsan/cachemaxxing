@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from . import facts
-from .canon import plain
+from .canon import jsonable, plain
 
 
 @dataclass(frozen=True)
@@ -97,3 +97,43 @@ def _priced(provider: str, model: str, total: int, read: int, write: int, out: i
             + out * m.output
         ) / 1e6
     return Usage(provider, model, total, read, write, out, cost)
+
+
+_HEADER = ("call site", "calls", "hit rate", "input", "cache read", "cache write", "output", "est $", "top drift")
+
+
+class Stats:
+    """Usage totals per call site, in memory."""
+
+    def __init__(self) -> None:
+        self.calls: dict[str, int] = {}
+        self.totals: dict[str, Usage] = {}
+
+    def add(self, call_site: str, u: Usage) -> None:
+        self.calls[call_site] = self.calls.get(call_site, 0) + 1
+        self.totals[call_site] = self.totals[call_site] + u if call_site in self.totals else u
+
+    def table(self, notes: dict[str, str] | None = None) -> str:
+        rows = [list(_HEADER)]
+        for site, u in sorted(self.totals.items()):
+            cost = "n/a" if u.est_cost is None else f"{u.est_cost:.4f}"
+            rows.append(
+                [
+                    site,
+                    str(self.calls[site]),
+                    f"{u.hit_rate:.1%}",
+                    f"{u.input:,}",
+                    f"{u.cache_read:,}",
+                    f"{u.cache_write:,}",
+                    f"{u.output:,}",
+                    cost,
+                    (notes or {}).get(site, ""),
+                ]
+            )
+        widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
+        return "\n".join("  ".join(c.ljust(w) for c, w in zip(r, widths, strict=True)).rstrip() for r in rows)
+
+
+def record(call_site: str, request: Any, response: Any) -> dict[str, Any]:
+    """One JSONL line for `cachemaxxing report`. The library never writes files; you do."""
+    return {"call_site": call_site, "request": jsonable(request), "response": jsonable(response)}
