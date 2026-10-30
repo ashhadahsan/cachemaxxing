@@ -1,8 +1,9 @@
+import json
 from typing import Any
 
 import pytest
 
-from cachemaxxing.usage import usage
+from cachemaxxing.usage import Stats, Usage, record, usage
 
 
 def test_anthropic_input_excludes_cache_tokens_so_we_add_them() -> None:
@@ -108,3 +109,28 @@ def test_sdk_objects_and_model_override() -> None:
             return {"type": "message", "model": "x", "usage": {"input_tokens": 10, "output_tokens": 0}}
 
     assert usage(Resp(), model="claude-haiku-5-5").est_cost == pytest.approx(10 * 0.10 / 1e6)
+
+
+def test_stats_aggregates_per_call_site_and_formats() -> None:
+    s = Stats()
+    u = Usage("anthropic", "m", input=100, cache_read=50, est_cost=0.5)
+    s.add("a", u)
+    s.add("a", u)
+    s.add("b", Usage("openai", "x", input=10))
+    assert s.calls == {"a": 2, "b": 1}
+    assert s.totals["a"].input == 200 and s.totals["a"].est_cost == 1.0
+    table = s.table({"a": "system[].text (timestamp) x3"})
+    assert "50.0%" in table and "n/a" in table and "timestamp" in table
+
+
+def test_record_is_json_serializable() -> None:
+    class Obj:
+        def model_dump(self, **kw: Any) -> dict[str, str]:
+            return {"type": "message"}
+
+    line = record("a", {"messages": [Obj()]}, Obj())
+    assert json.loads(json.dumps(line)) == {
+        "call_site": "a",
+        "request": {"messages": [{"type": "message"}]},
+        "response": {"type": "message"},
+    }
