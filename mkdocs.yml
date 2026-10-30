@@ -21,6 +21,7 @@ theme:
 nav:
   - Home: index.md
   - Quickstart: quickstart.md
+  - "Example: RAG chat": rag.md
   - How prompt caching works: caching.md
   - Diagnosing a low hit rate: diagnosing.md
   - API reference: reference.md
