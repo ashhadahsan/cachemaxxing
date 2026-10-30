@@ -208,9 +208,9 @@ def test_stale_markers_in_history_do_not_pile_up() -> None:
         assert str(kw).count("cache_control") <= 3
         hist = [*kw["messages"], {"role": "assistant", "content": f"a{i}"}]
     hist = []
-    for i in range(4):  # OpenAI 5.6+ keeps earlier breakpoints: they are its only read points (verified live)
+    for i in range(4):  # OpenAI: stale breakpoints stripped; the previous turn's position is re-marked instead
         kw = Prompt().system("S").history(hist).user(f"q{i}").openai("gpt-6-luna")
-        assert str(kw).count("prompt_cache_breakpoint") == i + 2
+        assert str(kw).count("prompt_cache_breakpoint") == min(i + 2, 3)
         hist = [*kw["input"][1:], {"role": "assistant", "content": f"a{i}"}]
     assert "prompt_cache_breakpoint" not in str(Prompt().history(hist).user("q").openai("gpt-5.5"))
     claude_marked = [{"role": "user", "content": [{"type": "text", "text": "hi", "cache_control": CC}]}]
@@ -259,3 +259,32 @@ def test_litellm_stale_tool_markers_are_replaced() -> None:
     stale = [{"type": "function", "function": {"name": "z", "parameters": {}, "cache_control": CC}}, *CHAT_TOOLS]
     kw = Prompt().tools(stale).system("S").user("q").litellm("anthropic/claude-haiku-5-5")
     assert str(kw["tools"]).count("cache_control") == 1 and "cache_control" in kw["tools"][-1]["function"]
+
+
+def test_marker_skips_empty_text_blocks() -> None:
+    hist = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": ""}]
+    kw = Prompt().system("S").history(hist).retrieved("chunk").user("q").anthropic("m")
+    assert kw["messages"][0]["content"] == [{"type": "text", "text": "hi", "cache_control": CC}]
+    assert kw["messages"][1] == {"role": "assistant", "content": ""}
+    blocks = [{"role": "assistant", "content": [{"type": "text", "text": "yo"}, {"type": "text", "text": " "}]}]
+    kw = Prompt().history(blocks).retrieved("c").user("q").anthropic("m")
+    assert (
+        kw["messages"][0]["content"][0]["cache_control"] == CC
+        and "cache_control" not in kw["messages"][0]["content"][1]
+    )
+
+
+def test_openai_re_marks_the_previous_turns_position() -> None:
+    hist = [
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+        {"role": "user", "content": "q2"},
+        {"role": "assistant", "content": "a2"},
+    ]
+    marked = lambda kw: [i for i, m in enumerate(kw["input"]) if "prompt_cache_breakpoint" in str(m)]  # noqa: E731
+    chat = Prompt().system("S").history(hist).user("q3").openai("gpt-6-luna")
+    assert marked(chat) == [0, 3, 5]  # static, previous final (q2), this final (q3)
+    rag = Prompt().system("S").history(hist).retrieved("chunk").user("q3").openai("gpt-6-luna")
+    assert marked(rag) == [0, 1, 3]  # static, previous history end (q1), this history end (q2)
+    anthropic = Prompt().system("S").history(hist).user("q3").anthropic("m")
+    assert str(anthropic["messages"]).count("cache_control") == 1  # Anthropic's lookback finds earlier entries

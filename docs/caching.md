@@ -16,6 +16,7 @@ What differs is who places the cache entries, what writes cost, and how long ent
 ## OpenAI
 
 - **GPT-5.6 and later** support explicit breakpoints: `prompt_cache_breakpoint: {"mode": "explicit"}` on a text part of an input message, with `prompt_cache_options: {"mode": "explicit", "ttl": "30m" | "12h"}` on the request (12 h is Responses-only). Writes cost **1.25×** (30 min) or **2.5×** (12 h); reads **0.1×** (0.05× on GPT-6.1 Sol and Terra). Minimum 1,024 tokens.
+- OpenAI only looks up cache entries at breakpoints present in the request. So cachemaxxing marks the end of the static prefix, the position the previous request wrote, and the new end. That lets a conversation keep reading its whole history even when you rebuild history from plain strings.
 - In the default implicit mode, OpenAI writes a cache entry at the end of the latest message on every request. A prompt whose tail changes every time pays write premiums on bytes that are never read again.
 - **GPT-5.5 and older** cache implicitly with no write charge; `prompt_cache_key` helps route requests that share a prefix to the same machine (about 15 requests per minute per key).
 - `input_tokens` / `prompt_tokens` **include** cached and written tokens.
