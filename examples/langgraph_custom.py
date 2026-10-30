@@ -1,9 +1,9 @@
-"""A hand-built LangGraph graph (model node + tool node) using cachemaxxing's cache_fields().
+"""A hand-built LangGraph graph (model node + tool node) with cachemaxxing's CachedModel.
 
 uv run --env-file .env python examples/langgraph_custom.py {openai|anthropic|gemini}
 
-Middleware only runs inside create_agent. In your own nodes, call cache_fields() before the model call:
-it returns the system message with the right cache marker and the extra `invoke` kwargs."""
+Middleware only runs inside create_agent. In your own graphs, wrap the chat model once with CachedModel:
+every call then gets the system prompt, the right cache fields, and its usage recorded in `llm.stats`."""
 
 import json
 import sys
@@ -14,8 +14,7 @@ from langchain_core.tools import tool
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from cachemaxxing import Stats, usage
-from cachemaxxing.langchain import cache_fields
+from cachemaxxing.langchain import CachedModel
 
 DATA = Path(__file__).parents[1] / "benchmarks" / "data"
 SYSTEM = (DATA / "policy.md").read_text() + "\n\n" + (DATA / "docs.md").read_text()
@@ -32,14 +31,9 @@ def check_warranty(serial_last4: str) -> str:
     return json.dumps({"serial_last4": serial_last4, "status": "active", "expires": "2027-08-14"})
 
 
-def build(provider: str, stats: Stats):  # type: ignore[no-untyped-def]
-    llm = init_chat_model(MODELS[provider]).bind_tools([check_warranty])
-
+def build(llm: CachedModel):  # type: ignore[no-untyped-def]
     def model_node(state: MessagesState) -> dict[str, list]:
-        system, extra = cache_fields(llm, SYSTEM, call_site="graph.support")
-        ai = llm.invoke([system, *state["messages"]], **extra)
-        stats.add("graph.support", usage(ai))
-        return {"messages": [ai]}
+        return {"messages": [llm.invoke(state["messages"])]}
 
     graph = StateGraph(MessagesState)
     graph.add_node("model", model_node)
@@ -51,8 +45,9 @@ def build(provider: str, stats: Stats):  # type: ignore[no-untyped-def]
 
 
 def main(provider: str) -> None:
-    stats = Stats()
-    app = build(provider, stats)
+    model = init_chat_model(MODELS[provider]).bind_tools([check_warranty])
+    llm = CachedModel(model, system=SYSTEM, call_site="graph.support")
+    app = build(llm)
     messages: list = []
     for question in [
         "My router keeps dropping Wi-Fi in the evening. What should I check first?",
@@ -61,7 +56,7 @@ def main(provider: str) -> None:
     ]:
         messages = app.invoke({"messages": [*messages, {"role": "user", "content": question}]})["messages"]
         print(f"\nQ: {question}\nA: {' '.join(messages[-1].text.split())[:200]}")
-    print(f"\n{stats.table()}")
+    print(f"\n{llm.stats.table()}")
 
 
 if __name__ == "__main__":

@@ -126,3 +126,41 @@ def test_cache_fields_for_custom_graph_nodes() -> None:
     assert cache_fields(ChatGoogleGenerativeAI(model="gemini-3.8-flash", google_api_key="t"), plain) == (plain, {})
     system, extra = cache_fields(ChatOpenAI(model="gpt-5.5", api_key="t"), "S", call_site="node", tools=[tool])
     assert extra["prompt_cache_key"].startswith("node:")
+
+
+def mock_openai(seen: list[Any]) -> Any:
+    import json as _json
+    from pathlib import Path
+
+    import httpx
+
+    fixtures = Path(__file__).parent / "fixtures"
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(_json.loads(req.content))
+        name = "openai_response.json" if req.url.path.endswith("/responses") else "openai_chat.json"
+        return httpx.Response(200, json=_json.loads((fixtures / name).read_text()))
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_cached_model_through_langchain_and_the_openai_sdk() -> None:
+    from cachemaxxing.langchain import CachedModel
+
+    seen: list[Any] = []
+    llm = ChatOpenAI(model="gpt-6-luna", api_key="t", http_client=mock_openai(seen))
+    records: list[dict[str, Any]] = []
+    cm = CachedModel(llm, system="You are helpful.", call_site="graph", on_record=records.append)
+    ai = cm.invoke([HumanMessage("hi")])
+    body = seen[0]
+    system = body.get("messages", body.get("input"))[0]
+    assert system["content"][-1]["prompt_cache_breakpoint"] == BP
+    assert body["prompt_cache_options"] == {"mode": "implicit", "ttl": "30m"}
+    assert isinstance(ai, AIMessage) and cm.stats.calls == {"graph": 1} and cm.stats.totals["graph"].cache_read == 1024
+    assert records[0]["request"]["messages"][0]["type"] == "system"
+    cm.invoke(
+        [SystemMessage("Own system prompt."), HumanMessage("hi")]
+    )  # a leading system message is used, not doubled
+    second = seen[1].get("messages", seen[1].get("input"))
+    assert [m["role"] for m in second][:2] in (["system", "user"], ["developer", "user"])
+    assert second[0]["content"][-1]["text"] == "Own system prompt."
