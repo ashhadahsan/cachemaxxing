@@ -39,3 +39,8 @@ def test_gemini_explicit_includes_storage() -> None:
 def test_unknown_or_mismatched_model_raises() -> None:
     with pytest.raises(ValueError):
         should_cache(5_000, 1, "openai", "claude-haiku-5-5")
+
+
+def test_long_context_prices_apply() -> None:
+    d = should_cache(150_000, 1, "anthropic", "claude-haiku-5-5")
+    assert d.saving == pytest.approx(2 * 0.15 * 0.50 - (0.15 * 0.625 + 0.15 * 0.05))
