@@ -1,65 +1,56 @@
-"""OpenAI: naive vs cachemaxxing on gpt-6-luna (Responses API). Needs OPENAI_API_KEY.
+"""OpenAI benchmark (Responses API): naive vs clean (implicit caching) vs cachemaxxing. Needs OPENAI_API_KEY.
 
-uv run --env-file .env python benchmarks/bench_openai.py --max-usd 1"""
+uv run --env-file .env python benchmarks/bench_openai.py --workload chat|rag [--model gpt-6.1-sol]"""
 
-import argparse
-import time
 from typing import Any
 
 import openai
 import workload as w
 
-from cachemaxxing import Prompt, Usage, usage
-from cachemaxxing.facts import MODELS
-
-MODEL = "gpt-6-luna"
+from cachemaxxing import Prompt
 
 
 def tools(defs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{"type": "function", **t} for t in defs]  # Responses: name/description/parameters flat
+    return [{"type": "function", **t} for t in defs]
 
 
-def contents(turns: list[tuple[str, str]]) -> list[dict[str, Any]]:
+def history(turns: list[tuple[str, str]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for q, a in turns:
         out += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
     return out
 
 
-def run(client: openai.OpenAI, arm: str, turns: int, budget: w.Budget, rep: int) -> list[Usage]:
-    done: list[tuple[str, str, float]] = []
-    rows = []
-    for q in w.questions(rep)[:turns]:
-        if arm == "naive":
-            kw: dict[str, Any] = {
-                "model": MODEL,
-                "instructions": w.naive_system(),
-                "tools": tools(w.naive_tools()),
-                "input": [*contents(w.naive_turns(done)), {"role": "user", "content": q}],
-            }
-        else:
-            p = Prompt("bench").tools(tools(w.TOOLS)).system(w.POLICY).context(w.DOCS)
-            p.history(contents([(x, a) for x, a, _ in done])).retrieved([w.volatile(), w.PROFILE]).user(q)
-            kw = p.openai(MODEL)
-        resp = client.responses.create(max_output_tokens=64, **kw)
-        u = usage(resp)
-        budget.spend(u)
-        rows.append(u)
-        done.append((q, resp.output_text or "", time.time()))
-    return rows
+def request(client: Any, arm: str, workload: str, model: str, q: str, done: list, reuses: int) -> dict[str, Any]:
+    plain = [(x, a) for x, a, _ in done]
+    if arm == "naive":
+        msgs = [*history(w.naive_turns(done)), {"role": "user", "content": q}]
+        return {
+            "model": model,
+            "instructions": w.naive_system(workload, q),
+            "tools": tools(w.naive_tools()),
+            "input": msgs,
+        }
+    static, per_turn = w.layout(workload, q)
+    if arm == "clean":  # the same content laid out well, with OpenAI's default (implicit) caching only
+        last = {"role": "user", "content": "\n\n".join([*per_turn, q])}
+        return {
+            "model": model,
+            "instructions": "\n\n".join([w.policy("clean"), *static]),
+            "tools": tools(w.TOOLS),
+            "input": [*history(plain), last],
+        }
+    p = Prompt("bench").tools(tools(w.TOOLS)).system(w.policy("cachemaxxing")).context(static)
+    return p.history(history(plain)).retrieved(per_turn).user(q).openai(model)
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--turns", type=int, default=8)
-    ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--max-usd", type=float, default=1.0)
-    args = ap.parse_args()
-    m = MODELS[MODEL]
-    budget = w.Budget(args.max_usd, w.projected_usd(m.input, m.output, args.turns, args.reps))
-    client = openai.OpenAI()
-    arms = {
-        arm: [run(client, arm, args.turns, budget, rep) for rep in range(args.reps)]
-        for arm in ("naive", "cachemaxxing")
-    }
-    print(w.write_results("openai", MODEL, "openai", args.turns, arms), f"spent ~${budget.spent:.4f}")
+    w.run_benchmark(
+        "openai",
+        "gpt-6-luna",
+        "openai",
+        openai.OpenAI,
+        request,
+        lambda client, kw: client.responses.create(max_output_tokens=64, **kw),
+        lambda r: r.output_text,
+    )

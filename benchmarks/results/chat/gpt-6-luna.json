@@ -1,0 +1,122 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "workload": "chat",
+  "date": "2026-10-30",
+  "sdk": "openai 3.41.0",
+  "cachemaxxing": "0.2.0",
+  "setup": {
+    "turns": 8,
+    "conversations": 3,
+    "note": "fresh static prefix per invocation (first conversation cold); one customer per conversation",
+    "naive_habits": [
+      "timestamp + request id atop system",
+      "tool order varies",
+      "JSON key order varies",
+      "history re-rendered"
+    ],
+    "arms": {
+      "naive": "the four habits",
+      "clean": "same content, stable layout, provider's automatic caching only",
+      "cachemaxxing": "cachemaxxing.Prompt adapters"
+    }
+  },
+  "arms": {
+    "naive": {
+      "cached_pct": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "est_usd": {
+        "mean": 0.007007,
+        "min": 0.007003,
+        "max": 0.007014
+      },
+      "runs": [
+        {
+          "input": 53977,
+          "cache_read": 0,
+          "cache_write": 53953,
+          "output": 512
+        },
+        {
+          "input": 53982,
+          "cache_read": 0,
+          "cache_write": 53958,
+          "output": 512
+        },
+        {
+          "input": 54068,
+          "cache_read": 0,
+          "cache_write": 54044,
+          "output": 512
+        }
+      ]
+    },
+    "clean": {
+      "cached_pct": {
+        "mean": 92.8,
+        "min": 84.7,
+        "max": 97.0
+      },
+      "est_usd": {
+        "mean": 0.001193,
+        "min": 0.000854,
+        "max": 0.001736
+      },
+      "runs": [
+        {
+          "input": 53764,
+          "cache_read": 45563,
+          "cache_write": 8177,
+          "output": 512
+        },
+        {
+          "input": 53782,
+          "cache_read": 52072,
+          "cache_write": 1686,
+          "output": 512
+        },
+        {
+          "input": 46962,
+          "cache_read": 45563,
+          "cache_write": 1378,
+          "output": 448
+        }
+      ]
+    },
+    "cachemaxxing": {
+      "cached_pct": {
+        "mean": 94.0,
+        "min": 85.9,
+        "max": 98.0
+      },
+      "est_usd": {
+        "mean": 0.001146,
+        "min": 0.000897,
+        "max": 0.001645
+      },
+      "runs": [
+        {
+          "input": 53752,
+          "cache_read": 46151,
+          "cache_write": 6708,
+          "output": 512
+        },
+        {
+          "input": 53753,
+          "cache_read": 52660,
+          "cache_write": 199,
+          "output": 512
+        },
+        {
+          "input": 53756,
+          "cache_read": 52660,
+          "cache_write": 199,
+          "output": 512
+        }
+      ]
+    }
+  }
+}

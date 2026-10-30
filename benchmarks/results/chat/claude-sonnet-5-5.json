@@ -1,0 +1,104 @@
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-5-5",
+  "workload": "chat",
+  "date": "2026-10-30",
+  "sdk": "anthropic 2.3.0",
+  "cachemaxxing": "0.2.0",
+  "setup": {
+    "turns": 8,
+    "conversations": 2,
+    "note": "fresh static prefix per invocation (first conversation cold); one customer per conversation",
+    "naive_habits": [
+      "timestamp + request id atop system",
+      "tool order varies",
+      "JSON key order varies",
+      "history re-rendered"
+    ],
+    "arms": {
+      "naive": "the four habits",
+      "clean": "same content, stable layout, provider's automatic caching only",
+      "cachemaxxing": "cachemaxxing.Prompt adapters"
+    }
+  },
+  "arms": {
+    "naive": {
+      "cached_pct": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "est_usd": {
+        "mean": 0.184238,
+        "min": 0.184218,
+        "max": 0.184258
+      },
+      "runs": [
+        {
+          "input": 89569,
+          "cache_read": 0,
+          "cache_write": 0,
+          "output": 512
+        },
+        {
+          "input": 89549,
+          "cache_read": 0,
+          "cache_write": 0,
+          "output": 512
+        }
+      ]
+    },
+    "clean": {
+      "cached_pct": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "est_usd": {
+        "mean": 0.228301,
+        "min": 0.228301,
+        "max": 0.228301
+      },
+      "runs": [
+        {
+          "input": 89279,
+          "cache_read": 0,
+          "cache_write": 89247,
+          "output": 512
+        },
+        {
+          "input": 89279,
+          "cache_read": 0,
+          "cache_write": 89247,
+          "output": 512
+        }
+      ]
+    },
+    "cachemaxxing": {
+      "cached_pct": {
+        "mean": 92.4,
+        "min": 86.3,
+        "max": 98.5
+      },
+      "est_usd": {
+        "mean": 0.029771,
+        "min": 0.016754,
+        "max": 0.042788
+      },
+      "runs": [
+        {
+          "input": 89285,
+          "cache_read": 77094,
+          "cache_write": 11153,
+          "output": 512
+        },
+        {
+          "input": 89282,
+          "cache_read": 87939,
+          "cache_write": 308,
+          "output": 512
+        }
+      ]
+    }
+  }
+}
