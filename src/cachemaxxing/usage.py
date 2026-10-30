@@ -51,11 +51,14 @@ def _n(d: Any, *keys: str) -> int:
 
 
 def usage(response: Any, model: str | None = None) -> Usage:
-    """Normalize an Anthropic, OpenAI (Responses or Chat), Gemini or LiteLLM response (object or dict)."""
+    """Normalize an Anthropic, OpenAI (Responses or Chat), Gemini, LiteLLM or LangChain AIMessage response."""
     d = plain(response)
     if not isinstance(d, dict):
         raise ValueError("unrecognised response: expected an SDK response object or dict")
     name = str(model or d.get("model") or d.get("model_version") or d.get("modelVersion") or "")
+    lc = d.get("usage_metadata")
+    if isinstance(lc, dict) and "input_tokens" in lc:  # LangChain AIMessage: input_tokens includes cache tokens
+        return _langchain(d, lc, model)
     meta = d.get("usage_metadata") or d.get("usageMetadata")
     if meta is not None or "candidates" in d:  # Gemini: prompt_token_count includes cached tokens
         total = _n(meta, "prompt_token_count") + _n(meta, "tool_use_prompt_token_count")
@@ -79,6 +82,23 @@ def usage(response: Any, model: str | None = None) -> Usage:
         read, write = _n(det, "cached_tokens"), _n(det, "cache_write_tokens")
         return _priced("openai", name, _n(u, "input_tokens"), read, write, _n(u, "output_tokens"), long_write)
     raise ValueError("unrecognised response: expected Anthropic, OpenAI, Gemini or LiteLLM")
+
+
+def _langchain(d: dict[str, Any], lc: dict[str, Any], model: str | None) -> Usage:
+    rm = d.get("response_metadata") or {}
+    name = str(model or rm.get("model_name") or rm.get("model") or "")
+    # priority/flex tiers prefix the keys; Anthropic reports TTL-split writes and then sets cache_creation to 0
+    det = {
+        k.removeprefix("priority_").removeprefix("flex_"): v for k, v in (lc.get("input_token_details") or {}).items()
+    }
+    long_write = _n(det, "ephemeral_1h_input_tokens")
+    write = _n(det, "cache_creation") + _n(det, "ephemeral_5m_input_tokens") + long_write
+    provider = {"google_genai": "gemini"}.get(rm.get("model_provider", ""), rm.get("model_provider", ""))
+    # ponytail: LangChain doesn't split OpenAI 12h writes from 30m ones, so they're priced at the 30m rate
+    out = _n(lc, "output_tokens")
+    return _priced(
+        provider or facts.provider_of(name), name, _n(lc, "input_tokens"), _n(det, "cache_read"), write, out, long_write
+    )
 
 
 def _priced(provider: str, model: str, total: int, read: int, write: int, out: int, long_write: int = 0) -> Usage:
