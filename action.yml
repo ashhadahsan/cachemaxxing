@@ -1,0 +1,36 @@
+name: cachemaxxing hit-rate gate
+description: Fail the job when a call site's prompt-cache hit rate drops below a threshold, from cachemaxxing record() logs.
+author: ashhadahsan
+branding:
+  icon: zap
+  color: orange
+inputs:
+  log:
+    description: Path to a JSONL log written with cachemaxxing.record()
+    required: true
+  min-hit-rate:
+    description: Minimum hit rate for every call site, from 0 to 1
+    required: false
+    default: "0.6"
+  version:
+    description: cachemaxxing version from PyPI (empty means latest)
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+    - shell: bash
+      env:
+        LOG: ${{ inputs.log }}
+        MIN_HIT_RATE: ${{ inputs.min-hit-rate }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        spec="cachemaxxing${VERSION:+==$VERSION}"
+        set +e
+        out=$(uvx --from "$spec" cachemaxxing report "$LOG" --min-hit-rate "$MIN_HIT_RATE" 2>&1)
+        status=$?
+        set -e
+        echo "$out"
+        { echo "### Prompt-cache hit rate"; echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        exit $status
