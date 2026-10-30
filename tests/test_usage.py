@@ -209,3 +209,34 @@ def test_langchain_ai_message_openai_gemini_and_priority_tier() -> None:
         )
     )
     assert p.cache_read == 80
+
+
+def test_provider_miss_reasons_are_captured() -> None:
+    a = {
+        "type": "message",
+        "model": "claude-haiku-5-5",
+        "usage": {"input_tokens": 10, "cache_creation_input_tokens": 41850, "output_tokens": 1},
+        "diagnostics": {"cache_miss_reason": {"type": "system_changed", "cache_missed_input_tokens": 41850}},
+    }
+    assert usage(a).miss_reason == "system_changed"
+    pending = {**a, "diagnostics": {"cache_miss_reason": None}}
+    assert usage(pending).miss_reason is None and usage({**a, "diagnostics": None}).miss_reason is None
+    o = {
+        "object": "response",
+        "model": "gpt-6-luna",
+        "usage": {"input_tokens": 100, "output_tokens": 1},
+        "prompt_cache_diagnostics": {"type": "cache_miss", "reason": "tools_changed", "cache_missed_tokens": 90},
+    }
+    assert usage(o).miss_reason == "tools_changed"
+    hit = {**o, "prompt_cache_diagnostics": {"type": "cache_hit"}}
+    gone = {**o, "prompt_cache_diagnostics": {"type": "comparison_response_not_found"}}
+    assert usage(hit).miss_reason is None and usage(gone).miss_reason == "comparison_response_not_found"
+
+
+def test_stats_counts_miss_reasons_per_call_site() -> None:
+    s = Stats()
+    s.add("a", Usage("anthropic", "m", input=10, miss_reason="system_changed"))
+    s.add("a", Usage("anthropic", "m", input=10, miss_reason="system_changed"))
+    s.add("a", Usage("anthropic", "m", input=10))
+    assert s.misses == {"a": {"system_changed": 2}}
+    assert "provider: system_changed x2" in s.table()

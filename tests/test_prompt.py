@@ -288,3 +288,17 @@ def test_openai_re_marks_the_previous_turns_position() -> None:
     assert marked(rag) == [0, 1, 3]  # static, previous history end (q1), this history end (q2)
     anthropic = Prompt().system("S").history(hist).user("q3").anthropic("m")
     assert str(anthropic["messages"]).count("cache_control") == 1  # Anthropic's lookback finds earlier entries
+
+
+def test_diagnose_requests_the_providers_own_miss_reasons() -> None:
+    p = Prompt().system("S").user("q")
+    assert p.anthropic("m", diagnose=True)["diagnostics"] == {"previous_message_id": None}
+    assert p.anthropic("m", diagnose="msg_1")["diagnostics"] == {"previous_message_id": "msg_1"}
+    assert "diagnostics" not in p.anthropic("m")
+    opts = p.openai("gpt-6-luna", diagnose="resp_1")["prompt_cache_options"]
+    assert opts == {"mode": "explicit", "ttl": "30m", "comparison_response_id": "resp_1"}
+    assert "comparison_response_id" not in str(p.openai("gpt-6-luna", diagnose=True))
+    with pytest.raises(ValueError, match="Responses"):
+        p.openai_chat("gpt-6-luna", diagnose="resp_1")
+    with pytest.raises(ValueError, match="GPT-5.6"):
+        p.openai("gpt-5.5", diagnose="resp_1")
