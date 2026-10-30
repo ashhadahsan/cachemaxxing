@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage  # no
 from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
 from langchain_openai import ChatOpenAI  # noqa: E402
 
-from cachemaxxing.langchain import CacheMiddleware  # noqa: E402
+from cachemaxxing.langchain import CacheMiddleware, cache_fields  # noqa: E402
 
 BP = {"mode": "explicit"}
 CC = {"type": "ephemeral"}
@@ -111,3 +111,18 @@ def test_async_variant() -> None:
 
     asyncio.run(mw.awrap_model_call(request(ChatOpenAI(model="gpt-6-luna", api_key="t")), handler))
     assert mw.stats.calls == {"agent": 1}
+
+
+def test_cache_fields_for_custom_graph_nodes() -> None:
+    tool = {"name": "lookup", "description": "d", "input_schema": {"type": "object"}}
+    bound = ChatOpenAI(model="gpt-6-luna", api_key="t").bind_tools([tool])  # a RunnableBinding is unwrapped
+    system, extra = cache_fields(bound, "You are helpful.")
+    assert system is not None and system.content[-1]["prompt_cache_breakpoint"] == BP
+    assert extra == {"prompt_cache_options": {"mode": "implicit", "ttl": "30m"}}
+    system, extra = cache_fields(ChatAnthropic(model="claude-haiku-5-5", api_key="t"), SystemMessage("S"), ttl="1h")
+    assert extra == {"cache_control": {"type": "ephemeral", "ttl": "1h"}}
+    assert system is not None and system.content[-1]["cache_control"] == extra["cache_control"]
+    plain = SystemMessage("S")
+    assert cache_fields(ChatGoogleGenerativeAI(model="gemini-3.8-flash", google_api_key="t"), plain) == (plain, {})
+    system, extra = cache_fields(ChatOpenAI(model="gpt-5.5", api_key="t"), "S", call_site="node", tools=[tool])
+    assert extra["prompt_cache_key"].startswith("node:")

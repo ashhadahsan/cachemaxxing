@@ -20,7 +20,7 @@ never imports LangChain."""
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
@@ -34,6 +34,8 @@ _KEEP = ("type", "content", "tool_calls", "tool_call_id", "name")  # what a prov
 
 
 def _provider(model: Any) -> tuple[str, str]:
+    while hasattr(model, "bound"):  # llm.bind_tools(...) / .bind(...) wrap the chat model in a RunnableBinding
+        model = model.bound
     name = str(getattr(model, "model_name", None) or getattr(model, "model", None) or "")
     kind = type(model).__name__
     if "Anthropic" in kind:
@@ -76,6 +78,34 @@ def _ai(result: Any) -> AIMessage | None:
     return next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
 
 
+def cache_fields(
+    model: Any,
+    system: SystemMessage | str | None = None,
+    *,
+    call_site: str = "graph",
+    ttl: str | None = None,
+    tools: Sequence[Any] = (),
+) -> tuple[SystemMessage | None, dict[str, Any]]:
+    """For a model call in your own LangGraph node: the system message with the right cache marker, and the
+    extra keyword arguments for `invoke`. Same rules as CacheMiddleware.
+
+        system, extra = cache_fields(llm, SYSTEM, call_site="graph.answer")
+        ai = llm.bind_tools(tools).invoke([system, *state["messages"]], **extra)
+    """
+    msg = SystemMessage(content=system) if isinstance(system, str) else system
+    provider, name = _provider(model)
+    if provider == "anthropic":
+        cc = _cc(_check_ttl("anthropic", ttl or "5m"))  # marker on the system prompt + automatic tail caching
+        return _mark(msg, "cache_control", cc), {"cache_control": cc}
+    if provider == "openai" and openai_explicit(name):
+        options = {"mode": "implicit", "ttl": _check_ttl("openai", ttl or "30m")}
+        return _mark(msg, "prompt_cache_breakpoint", {"mode": "explicit"}), {"prompt_cache_options": options}
+    if provider == "openai":
+        prefix = canonical_json([[_tool_name(t) for t in tools], jsonable(msg.content if msg else "")])
+        return msg, {"prompt_cache_key": f"{call_site}:{hashlib.sha256(prefix.encode()).hexdigest()[:16]}"}
+    return msg, {}  # Gemini caches implicitly; other providers are left alone
+
+
 class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
     """Add the right cache fields to every model call of a LangChain agent and measure what it saved."""
 
@@ -93,27 +123,13 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         self.stats = Stats()
 
     def _prepare(self, request: ModelRequest[Any]) -> ModelRequest[Any]:
-        provider, name = _provider(request.model)
-        settings = dict(request.model_settings or {})
-        if provider == "anthropic":
-            cc = _cc(_check_ttl("anthropic", self.ttl or "5m"))
-            settings.setdefault("cache_control", cc)  # automatic breakpoint: follows the growing conversation
-            return request.override(
-                system_message=_mark(request.system_message, "cache_control", cc), model_settings=settings
-            )
-        if provider == "openai" and openai_explicit(name):
-            options = {"mode": "implicit", "ttl": _check_ttl("openai", self.ttl or "30m")}
-            settings.setdefault("prompt_cache_options", options)
-            marked = _mark(request.system_message, "prompt_cache_breakpoint", {"mode": "explicit"})
-            return request.override(system_message=marked, model_settings=settings)
-        if provider == "openai":
-            system = request.system_message.content if request.system_message else ""
-            prefix = canonical_json([[_tool_name(t) for t in request.tools or []], jsonable(system)])
-            settings.setdefault(
-                "prompt_cache_key", f"{self.call_site}:{hashlib.sha256(prefix.encode()).hexdigest()[:16]}"
-            )
-            return request.override(model_settings=settings)
-        return request
+        tools = request.tools or []
+        system, extra = cache_fields(
+            request.model, request.system_message, call_site=self.call_site, ttl=self.ttl, tools=tools
+        )
+        if system is request.system_message and not extra:
+            return request
+        return request.override(system_message=system, model_settings={**extra, **(request.model_settings or {})})
 
     def _measure(self, request: ModelRequest[Any], result: Any) -> None:
         ai = _ai(result)
@@ -146,4 +162,4 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         return result
 
 
-__all__ = ["CacheMiddleware"]
+__all__ = ["CacheMiddleware", "cache_fields"]
