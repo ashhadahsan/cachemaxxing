@@ -82,6 +82,8 @@ def _mark(msg: Any, key: str, marker: Json, text_type: str, only_text: bool) -> 
     m = dict(plain(msg))
     content = m.get("content")
     if isinstance(content, str):
+        if not content.strip():  # providers reject markers on empty text
+            return None
         m["content"] = [{"type": text_type, "text": content, key: marker}]
         return m
     if isinstance(content, list):
@@ -89,7 +91,7 @@ def _mark(msg: Any, key: str, marker: Json, text_type: str, only_text: bool) -> 
         for i in range(len(blocks) - 1, -1, -1):
             kind = blocks[i].get("type") if isinstance(blocks[i], dict) else None
             ok = kind == text_type if only_text else kind is not None and kind not in _NOT_MARKABLE
-            if ok:
+            if ok and not (kind in ("text", "input_text") and not str(blocks[i].get("text", "")).strip()):
                 blocks[i] = {**blocks[i], key: marker}
                 m["content"] = blocks
                 return m
@@ -168,26 +170,28 @@ class Prompt:
         roles: tuple[str, ...],
         *,
         only_text: bool,
-        keep_old: bool = False,
+        count: int = 1,
     ) -> list[Any]:
-        """History, then the final user turn, with one marker at the end of what the next request repeats:
-        the final user block, or the end of history when a per-request retrieved block follows."""
-        # Anthropic allows 4 markers, so stale ones are stripped; its 20-block lookback finds earlier entries anyway.
-        # OpenAI GPT-5.6+ only looks up at breakpoints present in the request, so earlier ones are kept (keep_old).
-        # ponytail: OpenAI checks the first 2 and latest 50 breakpoints; trim old ones if a hard cap ever appears
-        msgs = list(self._history) if keep_old else [_unmark(m, key) for m in self._history]
+        """History, then the final user turn, with `count` markers on the last markable positions: the final
+        user block (unless a per-request retrieved block follows it), then eligible history messages.
+        Stale markers in history are stripped first so they never pile up. Anthropic needs one tail marker
+        (its 20-block lookback finds earlier entries); OpenAI only looks up at breakpoints present in the
+        request, so count=2 also re-marks the position the previous request wrote."""
+        msgs = [_unmark(m, key) for m in self._history]
         final: list[Json] = [{"type": text_type, "text": t} for t in self._retrieved + self._user]
-        if marker is not None:
-            if final and not self._retrieved:
-                final[-1][key] = marker
-            else:
-                for i in range(len(msgs) - 1, -1, -1):
-                    m = plain(msgs[i])
-                    if isinstance(m, dict) and m.get("role") in roles:
-                        marked = _mark(m, key, marker, text_type, only_text)
-                        if marked is not None:
-                            msgs[i] = marked
-                            break
+        left = count if marker is not None else 0
+        if left and final and not self._retrieved:
+            final[-1][key] = marker
+            left -= 1
+        for i in range(len(msgs) - 1, -1, -1):
+            if not left:
+                break
+            m = plain(msgs[i])
+            if isinstance(m, dict) and m.get("role") in roles and marker is not None:
+                marked = _mark(m, key, marker, text_type, only_text)
+                if marked is not None:
+                    msgs[i] = marked
+                    left -= 1
         if final:
             msgs.append({"role": "user", "content": final})
         return msgs
@@ -230,7 +234,7 @@ class Prompt:
                 parts[-1]["prompt_cache_breakpoint"] = bp
             msgs.append({"role": role, "content": parts})
         roles = ("user", "developer", "system")
-        msgs += self._tail(bp, "prompt_cache_breakpoint", text_type, roles, only_text=True, keep_old=explicit)
+        msgs += self._tail(bp, "prompt_cache_breakpoint", text_type, roles, only_text=True, count=2)
         kw[field] = msgs
         if explicit:
             kw["prompt_cache_options"] = {"mode": "explicit", "ttl": ttl}
