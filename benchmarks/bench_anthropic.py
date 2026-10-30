@@ -26,10 +26,10 @@ def contents(turns: list[tuple[str, str]]) -> list[dict[str, Any]]:
     return out
 
 
-def run(client: anthropic.Anthropic, arm: str, turns: int, budget: w.Budget) -> list[Usage]:
+def run(client: anthropic.Anthropic, arm: str, turns: int, budget: w.Budget, rep: int) -> list[Usage]:
     done: list[tuple[str, str, float]] = []
     rows = []
-    for q in w.QUESTIONS[:turns]:
+    for q in w.questions(rep)[:turns]:
         if arm == "naive":
             kw: dict[str, Any] = {
                 "model": MODEL,
@@ -59,5 +59,8 @@ if __name__ == "__main__":
     m = MODELS[MODEL]
     budget = w.Budget(args.max_usd, w.projected_usd(m.input, m.output, args.turns, args.reps))
     client = anthropic.Anthropic()
-    arms = {arm: [run(client, arm, args.turns, budget) for _ in range(args.reps)] for arm in ("naive", "cachemaxxing")}
+    arms = {
+        arm: [run(client, arm, args.turns, budget, rep) for rep in range(args.reps)]
+        for arm in ("naive", "cachemaxxing")
+    }
     print(w.write_results("anthropic", MODEL, "anthropic", args.turns, arms), f"spent ~${budget.spent:.4f}")
