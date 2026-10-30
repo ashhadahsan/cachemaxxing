@@ -1,0 +1,104 @@
+{
+  "provider": "openai",
+  "model": "gpt-6.1-sol",
+  "workload": "chat",
+  "date": "2026-10-30",
+  "sdk": "openai 3.41.0",
+  "cachemaxxing": "0.2.0",
+  "setup": {
+    "turns": 8,
+    "conversations": 2,
+    "note": "fresh static prefix per invocation (first conversation cold); one customer per conversation",
+    "naive_habits": [
+      "timestamp + request id atop system",
+      "tool order varies",
+      "JSON key order varies",
+      "history re-rendered"
+    ],
+    "arms": {
+      "naive": "the four habits",
+      "clean": "same content, stable layout, provider's automatic caching only",
+      "cachemaxxing": "cachemaxxing.Prompt adapters"
+    }
+  },
+  "arms": {
+    "naive": {
+      "cached_pct": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "est_usd": {
+        "mean": 0.143714,
+        "min": 0.143666,
+        "max": 0.143763
+      },
+      "runs": [
+        {
+          "input": 55558,
+          "cache_read": 0,
+          "cache_write": 55534,
+          "output": 488
+        },
+        {
+          "input": 55539,
+          "cache_read": 0,
+          "cache_write": 55515,
+          "output": 483
+        }
+      ]
+    },
+    "clean": {
+      "cached_pct": {
+        "mean": 88.4,
+        "min": 82.3,
+        "max": 94.5
+      },
+      "est_usd": {
+        "mean": 0.025808,
+        "min": 0.017588,
+        "max": 0.034029
+      },
+      "runs": [
+        {
+          "input": 55345,
+          "cache_read": 45563,
+          "cache_write": 9758,
+          "output": 503
+        },
+        {
+          "input": 55097,
+          "cache_read": 52072,
+          "cache_write": 3001,
+          "output": 483
+        }
+      ]
+    },
+    "cachemaxxing": {
+      "cached_pct": {
+        "mean": 91.0,
+        "min": 85.1,
+        "max": 96.9
+      },
+      "est_usd": {
+        "mean": 0.021553,
+        "min": 0.013864,
+        "max": 0.029242
+      },
+      "runs": [
+        {
+          "input": 55138,
+          "cache_read": 46930,
+          "cache_write": 6986,
+          "output": 464
+        },
+        {
+          "input": 55177,
+          "cache_read": 53446,
+          "cache_write": 495,
+          "output": 481
+        }
+      ]
+    }
+  }
+}

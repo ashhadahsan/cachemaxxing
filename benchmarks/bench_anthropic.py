@@ -1,66 +1,62 @@
-"""Anthropic: naive vs cachemaxxing on claude-haiku-5-5. Needs ANTHROPIC_API_KEY.
+"""Anthropic benchmark: naive vs clean (automatic caching) vs cachemaxxing. Needs ANTHROPIC_API_KEY.
 
-uv run --env-file .env python benchmarks/bench_anthropic.py --max-usd 1"""
+uv run --env-file .env python benchmarks/bench_anthropic.py --workload chat|rag [--model claude-sonnet-5-5]"""
 
-import argparse
-import time
 from typing import Any
 
 import anthropic
 import workload as w
 
-from cachemaxxing import Prompt, Usage, usage
-from cachemaxxing.facts import MODELS
-
-MODEL = "claude-haiku-5-5"
+from cachemaxxing import Prompt
 
 
 def tools(defs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]} for t in defs]
 
 
-def contents(turns: list[tuple[str, str]]) -> list[dict[str, Any]]:
+def history(turns: list[tuple[str, str]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for q, a in turns:
         out += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
     return out
 
 
-def run(client: anthropic.Anthropic, arm: str, turns: int, budget: w.Budget, rep: int) -> list[Usage]:
-    done: list[tuple[str, str, float]] = []
-    rows = []
-    for q in w.questions(rep)[:turns]:
-        if arm == "naive":
-            kw: dict[str, Any] = {
-                "model": MODEL,
-                "system": w.naive_system(),
-                "tools": tools(w.naive_tools()),
-                "messages": [*contents(w.naive_turns(done)), {"role": "user", "content": q}],
-            }
-        else:
-            p = Prompt("bench").tools(tools(w.TOOLS)).system(w.POLICY).context(w.DOCS)
-            p.history(contents([(x, a) for x, a, _ in done])).retrieved([w.volatile(), w.PROFILE]).user(q)
-            kw = p.anthropic(MODEL)
-        resp = client.messages.create(max_tokens=64, **kw)
-        u = usage(resp)
-        budget.spend(u)
-        rows.append(u)
-        answer = "".join(b.text for b in resp.content if b.type == "text")
-        done.append((q, answer or "(no text)", time.time()))
-    return rows
+def request(client: Any, arm: str, workload: str, model: str, q: str, done: list, reuses: int) -> dict[str, Any]:
+    plain = [(x, a) for x, a, _ in done]
+    if arm == "naive":
+        msgs = [*history(w.naive_turns(done)), {"role": "user", "content": q}]
+        return {
+            "model": model,
+            "system": w.naive_system(workload, q),
+            "tools": tools(w.naive_tools()),
+            "messages": msgs,
+        }
+    static, per_turn = w.layout(workload, q)
+    if arm == "clean":  # the same content laid out well, with Anthropic's automatic caching only
+        last = {"role": "user", "content": "\n\n".join([*per_turn, q])}
+        system = "\n\n".join([w.policy("clean"), *static])
+        return {
+            "model": model,
+            "cache_control": {"type": "ephemeral"},
+            "system": system,
+            "tools": tools(w.TOOLS),
+            "messages": [*history(plain), last],
+        }
+    p = Prompt("bench").tools(tools(w.TOOLS)).system(w.policy("cachemaxxing")).context(static)
+    return p.history(history(plain)).retrieved(per_turn).user(q).anthropic(model)
+
+
+def text(resp: Any) -> str:
+    return "".join(b.text for b in resp.content if b.type == "text")
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--turns", type=int, default=8)
-    ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--max-usd", type=float, default=1.0)
-    args = ap.parse_args()
-    m = MODELS[MODEL]
-    budget = w.Budget(args.max_usd, w.projected_usd(m.input, m.output, args.turns, args.reps))
-    client = anthropic.Anthropic()
-    arms = {
-        arm: [run(client, arm, args.turns, budget, rep) for rep in range(args.reps)]
-        for arm in ("naive", "cachemaxxing")
-    }
-    print(w.write_results("anthropic", MODEL, "anthropic", args.turns, arms), f"spent ~${budget.spent:.4f}")
+    w.run_benchmark(
+        "anthropic",
+        "claude-haiku-5-5",
+        "anthropic",
+        anthropic.Anthropic,
+        request,
+        lambda client, kw: client.messages.create(max_tokens=64, **kw),
+        text,
+    )

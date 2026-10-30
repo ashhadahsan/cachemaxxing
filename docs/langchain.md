@@ -41,7 +41,7 @@ On every model call, tool loops included, it changes only that call and never th
 
 Your own `model_settings` always win. `ttl=` takes `"5m"`/`"1h"` (Anthropic) or `"30m"`/`"12h"` (OpenAI).
 
-A live run of [`examples/langchain_agent.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/langchain_agent.py) (3 questions, one tool call, 4 model calls, 2026-10-30) gave 74.4% cached input on `gpt-6-luna` and 74.3% on `claude-haiku-5-5`. Only the first, cold call paid to write the cache.
+In the agent benchmark (3 customers × 3 questions with a tool call, 2026-10-30), `CacheMiddleware` cached 89.9% of input on `claude-haiku-5-5`, the same as langchain-anthropic's `AnthropicPromptCachingMiddleware` (89.8%), against 0% with no middleware. On `gpt-6-luna` LangChain's default agent already caches well (90.4%), and `CacheMiddleware` matched it (90.1%). The middleware's value is one setup for every provider plus per-call-site measurement; it doesn't add savings over a provider's own good defaults.
 
 !!! note
     On Anthropic, use `CacheMiddleware` *or* langchain-anthropic's `AnthropicPromptCachingMiddleware`, not both. Each adds its own breakpoints, and a request allows 4.

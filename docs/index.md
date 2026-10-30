@@ -24,19 +24,31 @@ The same `Prompt` renders for `p.openai(...)`, `p.openai_chat(...)`, `p.gemini(.
 
 ## Benchmark
 
-![Cached input tokens per 8-turn chat, naive vs cachemaxxing](assets/benchmark.svg)
+![Cached input tokens per conversation: naive vs clean prompt with provider auto-caching vs cachemaxxing](assets/benchmark.svg)
 
-The same 8-turn support conversation, with a ~6k-token system prompt, product docs and 6 tools, was sent twice: once with the four common habits and once through cachemaxxing. Each arm ran 3 conversations, one customer each, starting from a cold cache. Costs are estimates at list price.
+- **Against a sloppy app** (the naive arm, chat and RAG): input cost is 76–88% lower on every model.
+- **Against a clean prompt using the provider's own one-line caching**, it depends on the provider:
+  - *Anthropic:* automatic caching puts its single cache entry after the per-turn context (time, request id, retrieved chunks). That entry changes every turn, so the app pays the 1.25× write premium on every call and reads nothing back. That is 0% cached, and dearer than not caching at all. A breakpoint after the static prompt, which cachemaxxing places, fixes it: 82–89% cheaper.
+  - *Gemini:* implicit caching is best-effort and reached 39–56%. The explicit cache cachemaxxing creates when `should_cache()` says it pays reached 88–97%, 62–67% cheaper, with creation and storage included.
+  - *OpenAI:* implicit caching already finds a stable prefix, and cachemaxxing is only 6–19% cheaper. On OpenAI the win is fixing the habits, plus the measuring tools.
+  - *LangChain agents:* `CacheMiddleware` ties LangChain's `AnthropicPromptCachingMiddleware` on Anthropic and the default agent on OpenAI. It adds one setup for every provider and per-call-site measurement, not extra savings.
 
-| Provider | Model | Cached input | $ per conversation | Saving |
-|---|---|---|---|---|
-| Anthropic | `claude-haiku-5-5` | 0.0% → **94.8%** | $0.0092 → $0.0017 | **82%** |
-| OpenAI | `gpt-6-luna` | 0.0% → **93.1%** | $0.0070 → $0.0012 | **83%** |
-| Gemini | `gemini-3.8-flash` | 0.0% → **97.5%** | $0.0484 → $0.0094 | **80%** |
+| Workload | Model | naive | clean + provider auto-caching | cachemaxxing | vs naive | vs clean |
+|---|---|---|---|---|---|---|
+| chat | `claude-haiku-5-5` | 0% · $0.0090 | 0% · $0.0112 | 94.4% · $0.0014 | 84% cheaper | 87% cheaper |
+| chat | `gpt-6-luna` | 0% · $0.0068 | 92.8% · $0.0009 | 94% · $0.0009 | 87% cheaper | 6% cheaper |
+| chat | `gemini-3.8-flash` | 0% · $0.0468 | 55.6% · $0.0236 | 97.3% · $0.0077 | 83% cheaper | 67% cheaper |
+| chat | `claude-sonnet-5-5` | 0% · $0.1791 | 0% · $0.2232 | 92.4% · $0.0247 | 86% cheaper | 89% cheaper |
+| chat | `gpt-6.1-sol` | 0% · $0.1389 | 88.4% · $0.0209 | 91% · $0.0168 | 88% cheaper | 19% cheaper |
+| rag | `claude-haiku-5-5` | 0% · $0.0069 | 0% · $0.0086 | 87.4% · $0.0015 | 78% cheaper | 82% cheaper |
+| rag | `gpt-6-luna` | 0% · $0.0049 | 84.1% · $0.0011 | 85.6% · $0.0010 | 80% cheaper | 15% cheaper |
+| rag | `gemini-3.8-flash` | 0% · $0.0352 | 39.1% · $0.0226 | 88.2% · $0.0086 | 76% cheaper | 62% cheaper |
+| agent | `claude-haiku-5-5` | 0% · $0.0044 | 89.8% · $0.0010 | 89.9% · $0.0009 | 78% cheaper | 1% cheaper |
+| agent | `gpt-6-luna` | 90.4% · $0.0006 | — | 90.1% · $0.0006 | 2% dearer | — |
 
-The naive arm has four habits: a timestamp and request id at the top of the system prompt, tools in a different order on each call, JSON with varying key order, and history re-rendered every turn. On Gemini, the cachemaxxing arm used an explicit cache via `gemini_cache()`, because `should_cache()` said it pays; the cache's creation and storage cost is included. With implicit caching alone, the same layout reached 40.0% ($0.0315 per conversation).
+Cells: cached share of input tokens · estimated input cost per conversation at list price (cache writes and explicit-cache storage included; output excluded, since answer length varies between runs regardless of caching).
 
-Source: `benchmarks/results/*.json`, run 2026-10-30. Re-run any of it with `uv run --env-file .env python benchmarks/bench_<provider>.py`.
+Setup: 8-turn conversations (agents: 3 questions with a tool call), 3 customers per arm. Every arm starts from a cold cache with its own prompt, so no arm reads another's entries. The naive arm has the four habits: a timestamp and request id at the top of the system prompt, tool order that varies, JSON key order that varies, and history re-rendered every turn; in RAG, chunks also go in the system prompt. The clean arm has the same content laid out well, with Anthropic's top-level `cache_control` or OpenAI's and Gemini's default implicit caching. Data: [`benchmarks/results/`](https://github.com/ashhadahsan/cachemaxxing/tree/main/benchmarks/results), run 2026-10-30. Rerun with `uv run --env-file .env python benchmarks/bench_<provider>.py --workload chat|rag` and `benchmarks/bench_agent.py`; the table comes from `benchmarks/summary.py`.
 
 ## Install
 

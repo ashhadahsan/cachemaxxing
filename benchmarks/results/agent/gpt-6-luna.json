@@ -1,0 +1,90 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "workload": "agent",
+  "date": "2026-10-30",
+  "sdk": "langchain 1.4.7",
+  "cachemaxxing": "0.2.0",
+  "setup": {
+    "turns": 3,
+    "conversations": 3,
+    "note": "fresh static prefix per invocation (first conversation cold); one customer per conversation",
+    "naive_habits": [
+      "timestamp + request id atop system",
+      "tool order varies",
+      "JSON key order varies",
+      "history re-rendered"
+    ],
+    "arms": {
+      "naive": "LangChain create_agent, no caching middleware",
+      "clean": "create_agent + langchain-anthropic AnthropicPromptCachingMiddleware",
+      "cachemaxxing": "create_agent + cachemaxxing CacheMiddleware"
+    }
+  },
+  "arms": {
+    "naive": {
+      "cached_pct": {
+        "mean": 90.4,
+        "min": 74.5,
+        "max": 98.5
+      },
+      "est_usd": {
+        "mean": 0.000744,
+        "min": 0.000507,
+        "max": 0.001162
+      },
+      "runs": [
+        {
+          "input": 26082,
+          "cache_read": 19444,
+          "cache_write": 6626,
+          "output": 276
+        },
+        {
+          "input": 26647,
+          "cache_read": 26155,
+          "cache_write": 480,
+          "output": 480
+        },
+        {
+          "input": 26377,
+          "cache_read": 25975,
+          "cache_write": 390,
+          "output": 395
+        }
+      ]
+    },
+    "cachemaxxing": {
+      "cached_pct": {
+        "mean": 90.1,
+        "min": 74.3,
+        "max": 98.1
+      },
+      "est_usd": {
+        "mean": 0.000868,
+        "min": 0.000597,
+        "max": 0.001375
+      },
+      "runs": [
+        {
+          "input": 26432,
+          "cache_read": 19649,
+          "cache_write": 6771,
+          "output": 661
+        },
+        {
+          "input": 26716,
+          "cache_read": 26186,
+          "cache_write": 518,
+          "output": 607
+        },
+        {
+          "input": 26628,
+          "cache_read": 26133,
+          "cache_write": 483,
+          "output": 549
+        }
+      ]
+    }
+  }
+}

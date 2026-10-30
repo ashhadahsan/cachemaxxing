@@ -12,6 +12,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ### Changed
 
+- Benchmarks v2:
+  - a third arm, a clean prompt using only the provider's own automatic caching
+  - RAG and LangChain-agent workloads
+  - `claude-sonnet-5-5` and `gpt-6.1-sol`
+  - every arm starts cold with its own prompt
+  - costs compared on the input side, since output length varies with the answer and not with caching
 - `gemini_cache()` counts the prefix exactly (once per prefix) instead of estimating at ~4 characters per token. On the benchmark prompt the estimate was 17% below Gemini's count (and 41% below Anthropic's).
 
 ## [0.2.0] - 2026-10-30
