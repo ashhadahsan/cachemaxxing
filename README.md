@@ -2,8 +2,8 @@
 
 # cachemaxxing
 
-[![PyPI](https://img.shields.io/pypi/v/cachemaxxing)](https://pypi.org/project/cachemaxxing/)
-[![Python](https://img.shields.io/pypi/pyversions/cachemaxxing)](https://pypi.org/project/cachemaxxing/)
+[![PyPI](https://img.shields.io/pypi/v/cachemaxxing?cacheSeconds=3600)](https://pypi.org/project/cachemaxxing/)
+[![Python](https://img.shields.io/pypi/pyversions/cachemaxxing?cacheSeconds=3600)](https://pypi.org/project/cachemaxxing/)
 [![CI](https://github.com/ashhadahsan/cachemaxxing/actions/workflows/ci.yml/badge.svg)](https://github.com/ashhadahsan/cachemaxxing/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/ashhadahsan/cachemaxxing/blob/main/LICENSE)
 
