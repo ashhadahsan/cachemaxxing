@@ -101,11 +101,15 @@ def diff(a: Any, b: Any) -> Divergence | None:
             return Divergence(f"{pa} / {pb}", 0, va[:60], vb[:60], "key order" if same else None, seen)
         if va != vb:
             off = len(os.path.commonprefix([va, vb]))
-            lo = max(0, off - 30)
             hint = _hint(pa, va, vb, off, fa, fb, ra)
-            return Divergence(pa, off, va[lo : off + 30], vb[lo : off + 30], hint, seen + off)
+            return Divergence(pa, off, _ctx(va, off), _ctx(vb, off), hint, seen + off)
         seen += len(va)
     return None
+
+
+def _ctx(value: str, off: int) -> str:
+    """The whole value when it's short, otherwise 40 characters either side of the divergence."""
+    return value if len(value) <= 100 else value[max(0, off - 40) : off + 40]
 
 
 def _hint(
