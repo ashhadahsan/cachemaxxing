@@ -7,6 +7,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Self
 
+from . import facts
 from .canon import canonical_json, normalize_ws, plain, tool_name
 
 Json = dict[str, Any]
@@ -26,6 +27,11 @@ def _sort_tool(t: Any) -> Any:
 
 
 _NOT_MARKABLE = {"thinking", "redacted_thinking"}
+_LITELLM_ROUTES = {  # LiteLLM route prefixes that honour each provider's cache fields
+    "anthropic": {"", "anthropic", "bedrock", "vertex_ai"},
+    "openai": {"", "openai"},
+    "gemini": {"", "gemini", "vertex_ai"},
+}
 
 
 def _cc(ttl: str) -> Json:
@@ -202,3 +208,33 @@ class Prompt:
         if self._tools:
             prefix["tools"] = list(self._tools)
         return prefix
+
+    def litellm(self, model: str, *, ttl: str | None = None, explicit: bool = False) -> Json:
+        """kwargs for `litellm.completion(**kwargs)` (or the LiteLLM Proxy via the OpenAI SDK), model included.
+        Cache fields follow the route: Claude gets cache_control, openai/ gets openai_chat(), gemini/ stays
+        implicit unless explicit=True (LiteLLM then creates an explicit cache for the static prefix)."""
+        route = model.split("/", 1)[0] if "/" in model else ""
+        provider = facts.provider_of(model)
+        if route not in _LITELLM_ROUTES.get(provider, set()):
+            provider = "other"
+        if provider == "openai":
+            return self.openai_chat(model, ttl=ttl or "30m")
+        marker = _cc(ttl or "5m") if provider == "anthropic" or (provider == "gemini" and explicit) else None
+        kw: Json = {"model": model}
+        if self._tools:
+            tools = list(self._tools)
+            last = plain(tools[-1])
+            if provider == "anthropic" and isinstance(last, dict) and isinstance(last.get("function"), dict):
+                tools[-1] = {**last, "function": {**last["function"], "cache_control": marker}}
+            kw["tools"] = tools
+        msgs: list[Any] = []
+        if self.static:
+            parts: list[Json] = [{"type": "text", "text": t} for t in self.static]
+            if marker is not None:
+                parts[-1]["cache_control"] = marker
+            msgs.append({"role": "system", "content": parts})
+        # Gemini explicit caches cover the static prefix only; a history marker would create a cache per turn.
+        tail_marker = marker if provider == "anthropic" else None
+        msgs += self._tail(tail_marker, "cache_control", "text", ("user", "assistant"), only_text=True)
+        kw["messages"] = msgs
+        return kw
