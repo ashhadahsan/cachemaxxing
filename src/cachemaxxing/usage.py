@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import logging
+import re
 import threading
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from . import facts
 from .canon import jsonable, plain
+from .diff import NO_READ, NO_READ_WHY, Divergence, diff
+
+_log = logging.getLogger("cachemaxxing")
 
 
 @dataclass(frozen=True)
@@ -187,15 +193,27 @@ _HEADER = (
 
 
 class Stats:
-    """Usage totals per call site, in memory. Safe to share between threads."""
+    """Usage totals per call site, in memory. Safe to share between threads.
 
-    def __init__(self) -> None:
+    Give `add` each call's request too and Stats diagnoses misses as they happen: it compares the request with
+    the previous one from the same call site, counts what broke the cached prefix in `drift`, shows the top
+    cause in `table()`, and logs a warning with the exact change and the fix the first time each cause shows
+    up for a call site. `warn=False` keeps the diagnosis and drops the warnings."""
+
+    def __init__(self, *, warn: bool = True) -> None:
         self.calls: dict[str, int] = {}
         self.totals: dict[str, Usage] = {}
         self.misses: dict[str, dict[str, int]] = {}  # provider-reported miss reasons per call site
+        self.drift: dict[str, Counter[str]] = {}  # what broke the cached prefix, per call site
+        self.warn = warn
+        self._examples: dict[tuple[str, str], Divergence] = {}  # first example of each drift
+        self._last: dict[str, Any] = {}  # previous request per call site
         self._lock = threading.Lock()
 
-    def add(self, call_site: str, u: Usage) -> None:
+    def add(self, call_site: str, u: Usage, request: Any = None) -> Divergence | None:
+        """Count one call. With `request` (the kwargs you sent), also diagnose it: returns the Divergence when
+        this request broke the previous one's cached prefix, else None."""
+        current = None if request is None else jsonable(request)  # a copy: callers often edit their lists later
         with self._lock:
             self.calls[call_site] = self.calls.get(call_site, 0) + 1
             self.totals[call_site] = (
@@ -204,6 +222,28 @@ class Stats:
             if u.miss_reason:
                 counts = self.misses.setdefault(call_site, {})
                 counts[u.miss_reason] = counts.get(u.miss_reason, 0) + 1
+            previous = self._last.get(call_site)
+            if current is not None:
+                self._last[call_site] = current
+        if previous is None or current is None:
+            return None
+        div = diff(previous, current)
+        if div is not None and div.hint != "last turn":
+            path = re.sub(r"\[\d+\]", "[]", div.path)  # group growing conversations together
+            note, why = f"{path} ({div.hint or '?'})", f"the cached prefix broke: {div}"
+        elif u.cache_read == 0:
+            note, why, div = NO_READ, f"{NO_READ}. {NO_READ_WHY}", None
+        else:
+            return None
+        with self._lock:
+            seen = self.drift.setdefault(call_site, Counter())
+            first = note not in seen
+            seen[note] += 1
+            if div is not None:
+                self._examples.setdefault((call_site, note), div)
+        if first and self.warn:
+            _log.warning("%s: %s", call_site, why)
+        return div
 
     def _note(self, site: str, note: str) -> str:
         provider = _top(self.misses[site]) if self.misses.get(site) else ""
@@ -213,6 +253,8 @@ class Stats:
         rows = [list(_HEADER)]
         with self._lock:
             totals, calls = sorted(self.totals.items()), dict(self.calls)
+            top = {site: f"{key} x{n}" for site, c in self.drift.items() for key, n in c.most_common(1)}
+        notes = {**top, **(notes or {})}
         for site, u in totals:
             cost = "n/a" if u.est_cost is None else f"{u.est_cost:.4f}"
             saved = "n/a" if u.saved is None else f"{u.saved:.4f}"
@@ -227,7 +269,7 @@ class Stats:
                     f"{u.output:,}",
                     cost,
                     saved,
-                    self._note(site, (notes or {}).get(site, "")),
+                    self._note(site, notes.get(site, "")),
                 ]
             )
         widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]

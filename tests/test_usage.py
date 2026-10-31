@@ -8,6 +8,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from cachemaxxing.diff import NO_READ
 from cachemaxxing.usage import Stats, Usage, record, usage
 
 
@@ -360,3 +361,62 @@ def test_redacted_record_keeps_counts_and_structure_not_text() -> None:
         assert secret not in line
     assert '"lookup"' in line and '"claude-haiku-5-5"' in line and '"user"' in line and '"text"' in line
     assert usage(json.loads(line)["response"]) == usage(resp)
+
+
+def ts_request(i: int) -> dict[str, Any]:
+    text = f"Now: 2026-10-31T10:0{i}:00Z. You are helpful."
+    return {
+        "model": "claude-haiku-5-5",
+        "system": [{"type": "text", "text": text}],
+        "messages": [{"role": "user", "content": "hi"}],
+    }
+
+
+def missed() -> Usage:
+    return Usage("anthropic", "claude-haiku-5-5", input=1000, cache_write=1000)
+
+
+def test_stats_diagnoses_a_broken_prefix_and_warns_once(caplog: pytest.LogCaptureFixture) -> None:
+    s = Stats()
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        results = [s.add("s", missed(), request=ts_request(i)) for i in range(3)]
+    assert results[0] is None and all(r is not None and r.hint == "timestamp" for r in results[1:])
+    assert s.drift["s"] == {"system[].text (timestamp)": 2}
+    assert "system[].text (timestamp) x2" in s.table()
+    assert len(caplog.records) == 1 and all(x in caplog.text for x in ("a: ", "b: ", "fix: A time changes"))
+
+
+def test_stats_growing_conversation_is_not_drift(caplog: pytest.LogCaptureFixture) -> None:
+    s = Stats()
+    chat = [{"role": "user", "content": "q1"}]
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        s.add("s", missed(), request={"model": "m", "system": "S", "messages": chat})
+        chat += [{"role": "assistant", "content": "a1"}, {"role": "user", "content": "q2"}]
+        hit = Usage("anthropic", "m", input=1000, cache_read=900)
+        assert s.add("s", hit, request={"model": "m", "system": "S", "messages": chat}) is None
+    assert s.drift == {} and not caplog.records
+
+
+def test_stats_flags_a_repeated_prefix_with_no_cache_read(caplog: pytest.LogCaptureFixture) -> None:
+    s = Stats()
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        for _ in range(3):
+            assert s.add("s", missed(), request={"model": "m", "system": "S"}) is None
+    assert s.drift["s"] == {NO_READ: 2} and len(caplog.records) == 1 and "TTL" in caplog.text
+
+
+def test_stats_warn_false_and_no_request(caplog: pytest.LogCaptureFixture) -> None:
+    quiet, plain = Stats(warn=False), Stats()
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        for i in range(2):
+            quiet.add("s", missed(), request=ts_request(i))
+            plain.add("s", missed())
+    assert quiet.drift["s"] and plain.drift == {} and not caplog.records
+
+
+def test_stats_compares_with_what_was_sent_not_a_later_mutation() -> None:
+    s = Stats(warn=False)
+    req = ts_request(0)
+    s.add("s", missed(), request=req)
+    req["system"][0]["text"] = ts_request(1)["system"][0]["text"]  # the caller reuses and edits its dict
+    assert s.add("s", missed(), request=req) is not None
