@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-31
+
 This is the release candidate for 1.0. The public API is now frozen.
 
 ### Added
@@ -108,7 +110,8 @@ This is the release candidate for 1.0. The public API is now frozen.
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
 
-[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.5.0...v0.9.0
 [0.5.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.3.0...v0.4.0

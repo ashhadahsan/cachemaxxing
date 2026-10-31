@@ -103,7 +103,7 @@ $ cachemaxxing report calls.jsonl --min-hit-rate 0.6
 It exits 1 and names each call site below the threshold. In GitHub Actions, use the bundled action. It also writes the table to the job summary:
 
 ```yaml
-- uses: ashhadahsan/cachemaxxing@v0.5.0
+- uses: ashhadahsan/cachemaxxing@v0.9.0
   with:
     log: calls.jsonl        # written with cachemaxxing.record()
     min-hit-rate: "0.6"
