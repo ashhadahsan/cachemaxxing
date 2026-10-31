@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from cachemaxxing.usage import Stats, Usage, record, usage
 
@@ -289,3 +291,31 @@ def test_attributes_for_traces() -> None:
     assert all(isinstance(v, str | int | float) for v in a.values())  # valid OpenTelemetry attribute values
     bare = Usage("x", "y", input=1).attributes(prefix="")
     assert "est_cost_usd" not in bare and "miss_reason" not in bare and bare["input_tokens"] == 1  # None omitted
+
+
+KEYS = [
+    "type", "model", "object", "usage", "usage_metadata", "usageMetadata", "candidates", "input_tokens",
+    "output_tokens", "prompt_tokens", "completion_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
+    "cache_creation", "prompt_tokens_details", "input_tokens_details", "cached_tokens", "prompt_token_count",
+    "response_metadata", "input_token_details", "model_provider", "diagnostics", "prompt_cache_diagnostics",
+]  # fmt: skip
+LEAVES = (
+    st.none()
+    | st.booleans()
+    | st.integers(-10, 10**9)
+    | st.floats(allow_nan=False, allow_infinity=False)
+    | st.sampled_from(["message", "response", "chat.completion", "claude-haiku-5-5", "openai"])
+    | st.text(max_size=4)
+)
+JSONISH = st.recursive(
+    LEAVES, lambda c: st.lists(c, max_size=3) | st.dictionaries(st.sampled_from(KEYS), c, max_size=4), max_leaves=25
+)
+
+
+@settings(max_examples=500)
+@given(st.dictionaries(st.sampled_from(KEYS), JSONISH, max_size=6))
+def test_usage_raises_only_value_error(d: dict[str, Any]) -> None:
+    try:
+        usage(d)
+    except ValueError:
+        pass

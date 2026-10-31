@@ -87,11 +87,15 @@ def _miss(d: dict[str, Any]) -> str | None:
 
 
 def usage(response: Any, model: str | None = None) -> Usage:
-    """Normalize an Anthropic, OpenAI (Responses or Chat), Gemini, LiteLLM or LangChain AIMessage response."""
+    """Normalize an Anthropic, OpenAI (Responses or Chat), Gemini, LiteLLM or LangChain AIMessage response.
+    Raises ValueError for anything it can't read."""
     d = plain(response)
     if not isinstance(d, dict):
         raise ValueError("unrecognised response: expected an SDK response object or dict")
-    u = _usage(d, model)
+    try:
+        u = _usage(d, model)
+    except (AttributeError, TypeError) as e:  # a field of an unexpected type
+        raise ValueError(f"unrecognised response: {e}") from e
     reason = _miss(d)
     return replace(u, miss_reason=reason) if reason else u
 
