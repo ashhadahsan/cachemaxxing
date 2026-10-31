@@ -488,17 +488,7 @@ function drawTable() {
 drawTable();
 
 // ---- drift ----------------------------------------------------------------------------------
-const NO_READ = "prefix ok";
-const FIX = {
-  timestamp: "A time changes on every call. Move it into .retrieved(), after the cached prefix.",
-  uuid: "An id changes on every call. Drop it from the prompt, or move it into .retrieved().",
-  "hex id": "An id changes on every call. Drop it from the prompt, or move it into .retrieved().",
-  "tool order": "The same tools arrive in a different order. Pass them through Prompt.tools(), which sorts them.",
-  "key order": "The same JSON is serialized with another key order. Pass dicts to Prompt, or use canonical_json().",
-  whitespace: "Only whitespace differs. Prompt normalizes whitespace in system, context and examples.",
-  model: "The model changed. Different models never share a cache.",
-  removed: "This call dropped part of the previous one, such as trimmed history. Trim less often, in bigger steps.",
-};
+const { fixes: FIX, generic: GENERIC_FIX, noRead: NO_READ, noReadWhy: NO_READ_WHY } = {{FIXES}};
 function marked(text, p, q) {
   const end = Math.max(p, text.length - q);
   return h("code", {}, text.slice(0, p), end > p ? h("mark", {}, text.slice(p, end)) : null, text.slice(end) || (text ? "" : "(nothing)"));
@@ -531,9 +521,7 @@ for (const s of troubled) {
     const hint = m ? m[2] : null;
     const label = noRead ? h("span", {}, "Prefix matched, but nothing was read")
       : h("span", { class: "drift-label" }, h("code", {}, m ? m[1] : d.label), hint && hint !== "?" ? h("span", { class: "chip" }, hint) : null);
-    const fix = noRead
-      ? "The cache expired (the TTL counts from the previous request), the prefix is below the provider's minimum, or the request was routed elsewhere."
-      : FIX[hint] ?? "Run cachemaxxing diff on two consecutive requests from this call site to see exactly what changed.";
+    const fix = noRead ? NO_READ_WHY : FIX[hint] ?? GENERIC_FIX;
     list.append(h("li", { class: "drift-row" }, h("div", { class: "count" }, `×${nf.format(d.count)}`),
       h("div", { class: "drift-body" }, h("div", { class: "drift-label" }, label), h("p", { class: "fix" }, fix), d.example ? example(d.example) : null)));
   }
