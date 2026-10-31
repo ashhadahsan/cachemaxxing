@@ -32,6 +32,8 @@ support.answer  120    3.1%      912,410  28,104      0            6,012   0.092
 search.rerank   48     91.4%     402,551  367,902     12,880       1,920   0.0061
 ```
 
+Add `--html report.html` for the same report as a [dashboard page](monitoring.md#dashboard), with every divergence shown in context.
+
 `top drift` is the most common place where consecutive requests from the same call site diverge. `prefix ok, no cache read` means the requests matched but nothing was read; see the causes below.
 
 ## 3. See the exact byte

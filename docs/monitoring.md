@@ -1,9 +1,35 @@
 # Monitoring: traces and dashboard
 
-Two ways to watch hit rate and savings over time:
+Two ways to watch hit rate and savings:
 
+- in a dashboard page built from your `record()` log
 - in the tracing tool you already use (Langfuse, LangSmith or anything OpenTelemetry)
-- in a dashboard built from your `record()` log
+
+## Dashboard
+
+```console
+$ cachemaxxing report calls.jsonl --min-hit-rate 0.6 --html report.html
+```
+
+This writes one self-contained HTML page next to the usual table. Open it in any browser. The page shows:
+
+- the totals: calls, hit rate, spend, and the money caching saved
+- a gate banner, when you pass `--min-hit-rate`
+- the hit rate of every call, per call site
+- a sortable table of call sites
+- for each call site that missed, the exact characters that changed between consecutive requests, and how to fix it
+- the provider's own verdict, when you used `diagnose=`
+
+[See a demo built from a real log of 20 calls](demo.html). One of its call sites has the classic bug: the current time at the top of the system prompt.
+
+The page makes no network requests; the data is embedded and drawn by inline JavaScript. It does contain short snippets of your prompts around each divergence, so share it as you would share the log. `--html` doesn't change the exit code: the gate still fails below `--min-hit-rate`. That makes the page a good CI artifact:
+
+```yaml
+- run: cachemaxxing report calls.jsonl --min-hit-rate 0.6 --html report.html
+- uses: actions/upload-artifact@v5
+  if: always()
+  with: {name: cache-report, path: report.html}
+```
 
 ## Traces
 

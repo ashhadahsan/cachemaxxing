@@ -61,7 +61,7 @@ diverges at system[0].text char 41 (timestamp), after ~14 matching tokens
   b: 'You are helpful. Today is 2026-10-30T10:05:00Z.'
 ```
 
-For the provider's own verdict, add `diagnose=` to an adapter; `usage(resp).miss_reason` then says `system_changed`, `tools_changed`, and so on. To gate CI on hit rate, use the bundled GitHub Action: `uses: ashhadahsan/cachemaxxing@v0.3.0` with `log:` and `min-hit-rate:`.
+Add `--html report.html` for the same report as a self-contained dashboard page. [See the demo](https://ashhadahsan.github.io/cachemaxxing/demo.html), built from a real log. For the provider's own verdict, add `diagnose=` to an adapter; `usage(resp).miss_reason` then says `system_changed`, `tools_changed`, and so on. To gate CI on hit rate, use the bundled GitHub Action: `uses: ashhadahsan/cachemaxxing@v0.3.0` with `log:` and `min-hit-rate:`.
 
 ## Benchmark
 

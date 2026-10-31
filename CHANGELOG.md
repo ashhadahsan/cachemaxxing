@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ### Added
 
+- `cachemaxxing report LOG --html PATH` writes a self-contained dashboard page. It shows the totals, the hit rate of every call, a sortable table of call sites, and each divergence in context with a fix. The page makes no network requests.
+- A landing page at the docs root, and a demo dashboard built from a real log. The docs home moved to `overview/`.
 - `Usage.saved`: USD saved compared with the same call without caching. It is negative when cache writes cost more than the reads saved. `Stats` and `report` show a `saved $` column.
 - `Usage.attributes()`: a call's cache metrics as flat keys for Langfuse or LangSmith metadata and OpenTelemetry span attributes.
 - `Prompt.messages(chat)` takes a chat kept as an OpenAI-style list of `{"role", "content"}` messages and renders it for any provider. Leading system messages become the cached system prompt. Gemini gets these turns converted to its own format.

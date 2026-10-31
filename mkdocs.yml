@@ -21,7 +21,7 @@ theme:
       scheme: slate
       toggle: {icon: lucide/sun, name: Switch to light mode}
 nav:
-  - Home: index.md
+  - Overview: overview.md
   - Quickstart: quickstart.md
   - "Example: RAG chat": rag.md
   - LangChain and LangGraph: langchain.md
