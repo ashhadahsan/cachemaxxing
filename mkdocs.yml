@@ -22,6 +22,7 @@ theme:
       toggle: {icon: lucide/sun, name: Switch to light mode}
 nav:
   - Overview: overview.md
+  - Tutorial: tutorial.md
   - Quickstart: quickstart.md
   - "Example: RAG chat": rag.md
   - LangChain and LangGraph: langchain.md

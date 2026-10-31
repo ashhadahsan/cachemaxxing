@@ -2,6 +2,22 @@
 
 A cache miss never raises an error. Requests keep succeeding; the bill is just higher. The only ground truth is the usage the provider returns, so start there.
 
+## Automatic diagnosis while your app runs
+
+Give `Stats` each request along with its usage:
+
+```python
+from cachemaxxing import Stats, usage
+
+stats = Stats()
+resp = client.chat.completions.create(**kw)
+stats.add("support.answer", usage(resp), request=kw)
+```
+
+`Stats` compares each request with the previous one from the same call site. The first time something breaks the cached prefix, it logs a warning on the `cachemaxxing` logger: where the requests diverge, the text before and after, and the fix. After that, it only counts. `stats.table()` shows the most frequent cause for each call site, and `stats.drift` holds all of them. The [tutorial](tutorial.md) walks through a real example. To diagnose without the warnings, use `Stats(warn=False)`. `CacheMiddleware` and `CachedModel` do this for LangChain automatically.
+
+For production traffic, or a CI gate, log the calls and use the report.
+
 ## 1. Log every call
 
 ```python
@@ -57,7 +73,7 @@ search.rerank   48     91.4%     402,551  367,902     12,880       1,920   0.006
 
 Add `--html report.html` for the same report as a [dashboard page](monitoring.md#dashboard), with every divergence shown in context.
 
-The report reads the log line by line, so a large log doesn't need to fit in memory. A line it can't read is skipped and counted on stderr. That covers invalid JSON, a missing `request` or `response`, and a response in an unknown format. A common source of skipped lines is the last line, which your app may still be writing. Add `--strict` to stop at the first unreadable line instead, with exit code 2.
+Under the table, the report prints the most frequent cause for each call site that missed. It shows the first example, with the text before and after and the fix, just like the warning from `Stats`. The report reads the log line by line, so a large log doesn't need to fit in memory. A line it can't read is skipped and counted on stderr. That covers invalid JSON, a missing `request` or `response`, and a response in an unknown format. A common source of skipped lines is the last line, which your app may still be writing. Add `--strict` to stop at the first unreadable line instead, with exit code 2.
 
 `top drift` is the most common place where consecutive requests from the same call site diverge. `prefix ok, no cache read` means the requests matched but nothing was read; see the causes below.
 

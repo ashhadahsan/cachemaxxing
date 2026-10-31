@@ -12,7 +12,7 @@
 Anthropic, OpenAI and Gemini bill a repeated prompt prefix at a fraction of the input price, but only when the bytes really repeat. cachemaxxing finds where they don't, tells you what it costs, and lays your prompts out so they do. It is a thin library, not a proxy: zero runtime dependencies, and you keep your own SDK client.
 
 - **Measure.** `usage()` turns any provider's response into the same numbers: input, cache read, cache write, output, estimated $ and hit rate. `cachemaxxing report` totals them per call site.
-- **Diagnose.** `cachemaxxing diff` shows the first byte where two consecutive requests diverge, and why.
+- **Diagnose.** Give `Stats` each request and it tells you, as soon as it happens, the first byte where a request stopped repeating the previous one, why, and how to fix it. `cachemaxxing report` prints the same from a log.
 - **Fix.** `Prompt` orders your prompt from most to least stable and places each provider's cache markers for you.
 
 ```python
@@ -109,6 +109,8 @@ pip install cachemaxxing                  # or: uv add cachemaxxing
 pip install "cachemaxxing[anthropic]"     # extras: anthropic, openai, gemini, litellm, langchain
 ```
 
-**Docs:** https://ashhadahsan.github.io/cachemaxxing/ covers the quickstart, how caching works per provider, diagnosing a low hit rate, LangChain and LangGraph, the API reference, and how it compares.
+**New here?** The [tutorial](https://ashhadahsan.github.io/cachemaxxing/tutorial/) takes ten minutes, from a broken cache to a fixed one.
+
+**Docs:** https://ashhadahsan.github.io/cachemaxxing/ covers the tutorial, the quickstart, how caching works per provider, diagnosing a low hit rate, LangChain and LangGraph, the API reference, and how it compares.
 
 MIT licensed.
