@@ -103,15 +103,15 @@ def _record_call(
         if ai is None or not ai.usage_metadata:
             return
         u = usage(ai)
-        stats.add(call_site, u)
+        sent = {
+            "model": _provider(model)[1],
+            "tools": [_tool_name(t) for t in tools],
+            "system": jsonable(system.content) if system else "",
+            "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in messages],
+        }
+        stats.add(call_site, u, request=sent)  # diagnoses: what changed since this call site's previous request
         ai.response_metadata["cachemaxxing"] = u.attributes(call_site, prefix="")  # travels with it into traces
         if on_record:
-            sent = {
-                "model": _provider(model)[1],
-                "tools": [_tool_name(t) for t in tools],
-                "system": jsonable(system.content) if system else "",
-                "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in messages],
-            }
             on_record(record(call_site, sent, ai, redact=redact))
     except Exception:  # the call succeeded and was billed: measuring it must never make it fail
         _log.warning("could not measure a %r model call", call_site, exc_info=True)

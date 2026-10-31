@@ -81,7 +81,16 @@ Some middleware rewrites the cached prefix on every call and will lower your hit
 - tool-selection middleware that changes the tool list
 - summarization or context-editing middleware that rewrites history
 
-`cachemaxxing report` and `cachemaxxing diff` on the `on_record` log show where.
+You don't need to go looking for these. `CacheMiddleware` and `CachedModel` compare each model call with the previous one from the same call site. The first time something breaks the cached prefix, they log a warning on the `cachemaxxing` logger. It shows where the change happened, the text before and after it, and how to fix it:
+
+```text
+WARNING cachemaxxing: support.agent: the cached prefix broke: diverges at system[0].text char 22 (timestamp), after ~5 matching tokens
+  a: 'Current time: 2026-10-31T16:40:01Z ...'
+  b: 'Current time: 2026-10-31T16:40:03Z ...'
+  fix: A time changes on every call. Move it into .retrieved(), after the cached prefix.
+```
+
+`cache.stats.table()` shows the most frequent cause for each call site in its "top drift" column. `cache.stats.drift` holds the count for every cause. `cachemaxxing report` on the `on_record` log prints the same diagnosis.
 
 ## Custom LangGraph graphs and chains: `CachedModel`
 
