@@ -1,8 +1,11 @@
 import json
+import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from cachemaxxing import dashboard
 from cachemaxxing.cli import main
 from cachemaxxing.usage import record
 
@@ -71,3 +74,38 @@ def test_single_turn_misses_and_bad_input(tmp_path: Path, capsys: pytest.Capture
     assert main(["report", str(empty), "--min-hit-rate", "0.5"]) == 2
     arr = write(tmp_path / "arr.json", [1, 2])
     assert main(["diff", arr, arr]) == 2
+
+
+def embedded(html: str) -> dict[str, Any]:
+    blob = re.search(r'<script id="data" type="application/json">(.*?)</script>', html, re.S)
+    assert blob is not None
+    return json.loads(blob[1])
+
+
+def test_report_html_dashboard_is_self_contained(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    evil = "</script><script>alert(1)</script>"
+    lines = [
+        record("chat", {"model": "m", "system": f"{evil} Now: 2026-10-30T10:0{i}:00Z"}, anthropic_resp(0))
+        for i in range(3)
+    ]
+    lines += [record("faq", {"model": "m", "system": "stable"}, anthropic_resp(r)) for r in (0, 900, 900)]
+    log = tmp_path / "calls.jsonl"
+    log.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    out = tmp_path / "dash.html"
+    assert main(["report", str(log), "--min-hit-rate", "0.5", "--html", str(out)]) == 1  # the gate still applies
+    html = out.read_text()
+    assert "<script>alert(1)" not in html  # prompt text can't break out of the data block
+    assert not re.search(r'(src|href)="https?:|@import|url\(\s*["\']?https?:', html)  # no network requests
+    data = embedded(html)
+    assert data["source"] == "calls.jsonl" and data["min_hit_rate"] == 0.5
+    chat, faq = data["sites"]
+    assert (chat["name"], chat["calls"], faq["hit_rate"]) == ("chat", 3, pytest.approx(1800 / 2100))
+    drift = chat["drift"][0]
+    assert drift["label"] == "system[].text (timestamp)" and drift["count"] == 2 and "10:00" in drift["example"]["a"]
+    assert len(data["calls"]) == 6 and data["calls"][4][:2] == [1, pytest.approx(0.9)]
+    assert "wrote" in capsys.readouterr().err
+
+
+def test_docs_demo_dashboard_matches_the_template() -> None:
+    page = Path("docs/demo.html").read_text(encoding="utf-8")
+    assert dashboard.render(embedded(page)) == page, "run: uv run python benchmarks/demo.py --rerender"
