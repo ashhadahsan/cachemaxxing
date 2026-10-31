@@ -227,3 +227,13 @@ def test_on_record_with_redact_holds_no_prompt_or_output_text() -> None:
     line = json.dumps(lines[0])
     assert "You are helpful" not in line and '"hi"' not in line and '"ok"' not in line
     assert lines[0]["response"]["cachemaxxing_usage"]["cache_read"] == 1500
+
+
+def test_middleware_diagnoses_a_changing_system_prompt(caplog: pytest.LogCaptureFixture) -> None:
+    mw = CacheMiddleware("agent")
+    model = ChatOpenAI(model="gpt-6-luna", api_key="t")
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        for i in range(3):
+            run(mw, request(model, f"Now: 2026-10-31T10:0{i}:00Z. You are helpful."), reply("openai", "gpt-6-luna"))
+    assert mw.stats.drift["agent"] == {"system[].text (timestamp)": 2}
+    assert "fix: A time changes on every call" in caplog.text
