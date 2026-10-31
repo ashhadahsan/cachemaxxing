@@ -1,0 +1,23 @@
+name: facts reminder
+# On the 1st of each month, open an issue to re-check the provider facts (prices, minimums, TTLs).
+on:
+  schedule: [{cron: "0 9 1 * *"}]
+  workflow_dispatch:
+permissions: {issues: write}
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BODY: |
+            Monthly check that cost estimates and `should_cache()` still match the providers.
+
+            - [ ] Open every `source` URL in `src/cachemaxxing/facts.py` and the provider docs in `PROVIDERS`
+            - [ ] Update changed prices, minimum cacheable tokens and TTLs; add new models
+            - [ ] Bump `VERIFIED`
+            - [ ] `uv run python -m cachemaxxing.facts > docs/_facts.md`
+            - [ ] Check the scheduled price changes noted in `facts.py` (gemini-4-argon 2026-12-01, gemini-3.8-flash 2027-01-01)
+            - [ ] If anything changed: CHANGELOG entry and a patch release
+        run: gh issue create --title "Re-verify provider facts ($(date -u +%Y-%m))" --body "$BODY"
