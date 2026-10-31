@@ -1,4 +1,4 @@
-"""cachemaxxing diff A.json B.json | cachemaxxing report LOG.jsonl [--min-hit-rate X] [--html PATH]"""
+"""cachemaxxing diff A.json B.json | cachemaxxing report LOG.jsonl [--min-hit-rate X] [--html PATH] [--strict]"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -21,21 +22,40 @@ def _load(path: str) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _report(log: str, min_hit_rate: float | None, html: str | None = None) -> int:
+def _records(log: str, strict: bool) -> Iterator[tuple[str, dict[str, Any], Usage]]:
+    """(call site, request, usage) per readable line, streamed. Unreadable lines are skipped and counted,
+    or fatal with strict; a writer may still be appending the last line."""
+    skipped, first = 0, ""
+    with open(log, encoding="utf-8") as f:
+        for n, line in enumerate(f, 1):
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+                request = rec["request"]
+                if not isinstance(request, dict):
+                    raise ValueError("request is not an object")
+                yield str(rec.get("call_site", "default")), request, usage(rec["response"])
+            except (ValueError, KeyError, AttributeError, TypeError) as e:
+                why = f"line {n}: {type(e).__name__}: {e}"
+                if strict:
+                    raise ValueError(f"{log} {why}") from e
+                skipped, first = skipped + 1, first or why
+    if skipped:
+        print(f"cachemaxxing: skipped {skipped} unreadable line(s) in {log} (first: {first})", file=sys.stderr)
+
+
+def _report(log: str, min_hit_rate: float | None, html: str | None = None, strict: bool = False) -> int:
     stats = Stats()
     last: dict[str, Any] = {}
     drift: dict[str, Counter[str]] = {}
     examples: dict[tuple[str, str], Divergence] = {}
     calls: list[tuple[str, Usage, str]] = []
-    for line in Path(log).read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        site, u = rec.get("call_site", "default"), usage(rec["response"])
+    for site, request, u in _records(log, strict):
         stats.add(site, u)
         note = ""
         if site in last:
-            div = diff(last[site], rec["request"])
+            div = diff(last[site], request)
             if (div is None or div.hint == "last turn") and u.cache_read == 0:
                 note = NO_READ
             elif div is not None and div.hint != "last turn":
@@ -45,7 +65,7 @@ def _report(log: str, min_hit_rate: float | None, html: str | None = None) -> in
             if note:
                 drift.setdefault(site, Counter())[note] += 1
         calls.append((site, u, note))
-        last[site] = rec["request"]
+        last[site] = request
     if not stats.totals:
         raise ValueError(f"no records in {log}")
     notes = {site: f"{key} x{n}" for site, c in drift.items() for key, n in c.most_common(1)}
@@ -70,13 +90,14 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("log")
     r.add_argument("--min-hit-rate", type=float, help="exit 1 if any call site is below this (0-1)")
     r.add_argument("--html", metavar="PATH", help="also write a self-contained dashboard page here")
+    r.add_argument("--strict", action="store_true", help="exit 2 on the first unreadable line instead of skipping it")
     args = ap.parse_args(argv)
     try:
         if args.cmd == "diff":
             div = diff(_load(args.a), _load(args.b))
             print(div if div else "no divergence: B repeats all of A")
             return 1 if div else 0
-        return _report(args.log, args.min_hit_rate, args.html)
+        return _report(args.log, args.min_hit_rate, args.html, args.strict)
     except (OSError, ValueError, KeyError) as e:
         print(f"cachemaxxing: {e}", file=sys.stderr)
         return 2

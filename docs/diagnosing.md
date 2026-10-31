@@ -34,6 +34,8 @@ search.rerank   48     91.4%     402,551  367,902     12,880       1,920   0.006
 
 Add `--html report.html` for the same report as a [dashboard page](monitoring.md#dashboard), with every divergence shown in context.
 
+The report reads the log line by line, so a large log doesn't need to fit in memory. A line it can't read is skipped and counted on stderr. That covers invalid JSON, a missing `request` or `response`, and a response in an unknown format. A common source of skipped lines is the last line, which your app may still be writing. Add `--strict` to stop at the first unreadable line instead, with exit code 2.
+
 `top drift` is the most common place where consecutive requests from the same call site diverge. `prefix ok, no cache read` means the requests matched but nothing was read; see the causes below.
 
 ## 3. See the exact byte
