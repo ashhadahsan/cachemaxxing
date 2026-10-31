@@ -4,6 +4,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- `Usage.saved`: USD saved compared with the same call without caching. It is negative when cache writes cost more than the reads saved. `Stats` and `report` show a `saved $` column.
+- `Usage.attributes()`: a call's cache metrics as flat keys for Langfuse or LangSmith metadata and OpenTelemetry span attributes.
+- `CacheMiddleware` and `CachedModel` attach these metrics to every reply as `response_metadata["cachemaxxing"]`.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added

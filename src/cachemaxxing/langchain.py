@@ -96,7 +96,9 @@ def _record_call(
     ai = _ai(result)
     if ai is None or not ai.usage_metadata:
         return
-    stats.add(call_site, usage(ai))
+    u = usage(ai)
+    stats.add(call_site, u)
+    ai.response_metadata["cachemaxxing"] = u.attributes(call_site, prefix="")  # travels with the message into traces
     if on_record:
         sent = {
             "model": _provider(model)[1],

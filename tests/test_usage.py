@@ -267,3 +267,25 @@ def test_stats_sums_saved_and_shows_it() -> None:
     s.add("a", Usage("anthropic", "m", input=100, cache_read=90, est_cost=0.1, saved=0.4))
     assert s.totals["a"].saved == pytest.approx(0.8)
     assert "saved $" in s.table() and "0.8000" in s.table()
+
+
+def test_attributes_for_traces() -> None:
+    u = Usage(
+        "anthropic",
+        "claude-haiku-5-5",
+        input=10100,
+        cache_read=9000,
+        cache_write=1000,
+        output=50,
+        est_cost=0.0005,
+        saved=0.0006,
+        miss_reason="system_changed",
+    )
+    a = u.attributes("support.answer")
+    assert a["cachemaxxing.call_site"] == "support.answer" and a["cachemaxxing.hit_rate"] == pytest.approx(
+        0.8911, abs=1e-4
+    )
+    assert a["cachemaxxing.saved_usd"] == 0.0006 and a["cachemaxxing.miss_reason"] == "system_changed"
+    assert all(isinstance(v, str | int | float) for v in a.values())  # valid OpenTelemetry attribute values
+    bare = Usage("x", "y", input=1).attributes(prefix="")
+    assert "est_cost_usd" not in bare and "miss_reason" not in bare and bare["input_tokens"] == 1  # None omitted

@@ -25,6 +25,26 @@ class Usage:
     def hit_rate(self) -> float:
         return self.cache_read / self.input if self.input else 0.0
 
+    def attributes(
+        self, call_site: str | None = None, *, prefix: str = "cachemaxxing."
+    ) -> dict[str, str | int | float]:
+        """Flat metrics for a trace: Langfuse or LangSmith metadata, OpenTelemetry span attributes
+        (`span.set_attributes(u.attributes("support.answer"))`). Unknown values are left out."""
+        values = {
+            "call_site": call_site,
+            "provider": self.provider,
+            "model": self.model,
+            "hit_rate": self.hit_rate,
+            "input_tokens": self.input,
+            "cache_read_tokens": self.cache_read,
+            "cache_write_tokens": self.cache_write,
+            "output_tokens": self.output,
+            "est_cost_usd": self.est_cost,
+            "saved_usd": self.saved,
+            "miss_reason": self.miss_reason,
+        }
+        return {prefix + k: v for k, v in values.items() if v is not None}
+
     def __add__(self, other: Usage) -> Usage:
         cost = None if self.est_cost is None or other.est_cost is None else self.est_cost + other.est_cost
         saved = None if self.saved is None or other.saved is None else self.saved + other.saved
