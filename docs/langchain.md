@@ -149,3 +149,19 @@ ai = ChatAnthropic(model=kw["model"]).invoke([{"role": "system", "content": kw["
 ```
 
 Both were checked live with langchain 1.4.7: the second identical call read 6,272 of 6,283 input tokens on OpenAI and 9,993 of 10,005 on Anthropic. For tools, pass `kw["tools"]` to `bind_tools()`. Anthropic tool dicts need a `description`, or LangChain drops the marker.
+
+## If something goes wrong
+
+`CacheMiddleware` and `CachedModel` never make a model call fail that would have worked without them:
+
+- A wrong setting, such as a TTL the provider doesn't offer, raises `ValueError` before anything is sent.
+- Any other error while adding cache fields sends the request without them.
+- Any error while measuring a reply, including one raised by your `on_record`, is caught after the call. The reply is returned as usual.
+
+In the last two cases the call is not cached or not measured, and a warning with the traceback goes to the `cachemaxxing` logger. To see these warnings, make sure your logging setup shows that logger:
+
+```python
+import logging
+
+logging.getLogger("cachemaxxing").setLevel(logging.WARNING)
+```
