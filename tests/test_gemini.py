@@ -1,5 +1,7 @@
 import asyncio
+import time
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -112,3 +114,37 @@ def test_exact_count_decides_and_is_memoized() -> None:
     assert name == "cachedContents/0"  # the exact count (5,000) clears the minimum
     gemini.gemini_cache(c, small, "gemini-3.8-flash", expected_reuses=20)
     assert counted == ["gemini-3.8-flash"]
+
+
+class SlowCaches(Caches):
+    def create(self, *, model: str, config: dict[str, Any]) -> Any:
+        time.sleep(0.05)  # a network round trip: other callers arrive while this one is creating
+        return super().create(model=model, config=config)
+
+
+def test_concurrent_callers_create_one_cache() -> None:
+    caches = SlowCaches()
+    c = SimpleNamespace(caches=caches, aio=SimpleNamespace(caches=AsyncCaches(caches)))
+    with ThreadPoolExecutor(8) as pool:
+        names = list(pool.map(lambda _: gemini.gemini_cache(c, BIG, "gemini-3.8-flash", expected_reuses=20), range(8)))
+    assert len(caches.created) == 1 and set(names) == {"cachedContents/0"}
+
+
+def test_concurrent_async_callers_create_one_cache() -> None:
+    caches = Caches()
+
+    class SlowAsync(AsyncCaches):
+        async def create(self, **kw: Any) -> Any:
+            await asyncio.sleep(0.05)
+            return self.inner.create(**kw)
+
+    c = SimpleNamespace(caches=caches, aio=SimpleNamespace(caches=SlowAsync(caches)))
+
+    async def many() -> list[str | None]:
+        call = gemini.gemini_cache_async(c, BIG, "gemini-3.8-flash", expected_reuses=20)
+        return await asyncio.gather(
+            *[gemini.gemini_cache_async(c, BIG, "gemini-3.8-flash", expected_reuses=20) for _ in range(7)], call
+        )
+
+    names = asyncio.run(many())
+    assert len(caches.created) == 1 and set(names) == {"cachedContents/0"}
