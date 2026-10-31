@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -122,3 +123,21 @@ def test_report_skips_unreadable_lines_unless_strict(tmp_path: Path, capsys: pyt
     assert re.search(r"^s\s+2\s", out, re.M)  # both good records counted
     assert main(["report", str(log), "--strict"]) == 2
     assert "line 2" in capsys.readouterr().err
+
+
+def test_report_on_a_redacted_log_matches_the_plain_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def hashed(s: str) -> str:
+        return hashlib.sha256(s.encode()).hexdigest()[:12]
+
+    calls = [
+        ({"model": "m", "system": f"Now: 2026-10-30T10:0{i}:00Z"}, anthropic_resp(r)) for i, r in enumerate((0, 0, 900))
+    ]
+    plain, redacted = tmp_path / "plain.jsonl", tmp_path / "redacted.jsonl"
+    plain.write_text("\n".join(json.dumps(record("chat", q, a)) for q, a in calls))
+    redacted.write_text("\n".join(json.dumps(record("chat", q, a, redact=hashed)) for q, a in calls))
+    assert main(["report", str(plain)]) == 0
+    expected = capsys.readouterr().out
+    assert main(["report", str(redacted)]) == 0
+    got = capsys.readouterr().out
+    assert "2026-10-30" not in redacted.read_text()
+    assert got == expected.replace("(timestamp)", "(?)")  # same numbers and drifting field, no characters to hint from

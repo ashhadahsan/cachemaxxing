@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, replace
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from . import facts
@@ -102,6 +103,9 @@ def usage(response: Any, model: str | None = None) -> Usage:
 
 
 def _usage(d: dict[str, Any], model: str | None) -> Usage:
+    stored = d.get("cachemaxxing_usage")
+    if isinstance(stored, dict):  # a response that record(..., redact=...) reduced to its counts
+        return Usage(**stored)
     name = str(model or d.get("model") or d.get("model_version") or d.get("modelVersion") or "")
     lc = d.get("usage_metadata")
     if isinstance(lc, dict) and "input_tokens" in lc:  # LangChain AIMessage: input_tokens includes cache tokens
@@ -235,7 +239,36 @@ def _top(counts: dict[str, int]) -> str:
     return f"provider: {reason} x{n}"
 
 
-def record(call_site: str, request: Any, response: Any) -> dict[str, Any]:
+_KEEP = {"model", "role", "type"}  # values diff needs to line requests up; never prompt text
+
+
+def _redacted(x: Any, redact: Callable[[str], str], keep: set[str] = _KEEP) -> Any:
+    if isinstance(x, dict):
+        return {
+            k: v
+            if k in keep and isinstance(v, str)
+            else _redacted(v, redact, keep | {"name"} if k == "tools" else keep)
+            for k, v in x.items()
+        }
+    if isinstance(x, list):
+        return [_redacted(v, redact, keep) for v in x]
+    return redact(x) if isinstance(x, str) else x
+
+
+def record(
+    call_site: str, request: Any, response: Any, *, redact: Callable[[str], str] | None = None
+) -> dict[str, Any]:
     """One JSONL line for `cachemaxxing report`. The library never writes files; you do.
-    `call_site` is your name for the place in your code that made the call (see `Prompt`)."""
-    return {"call_site": call_site, "request": jsonable(request), "response": jsonable(response)}
+    `call_site` is your name for the place in your code that made the call (see `Prompt`).
+
+    With `redact`, the line holds no prompt or output text: every string in the request goes through
+    `redact` (except model names, roles, block types and tool names), and the response is reduced to its
+    token counts and cost. Raises ValueError if the response can't be read (see `usage`)."""
+    if redact is None:
+        return {"call_site": call_site, "request": jsonable(request), "response": jsonable(response)}
+    counts = asdict(usage(response))
+    return {
+        "call_site": call_site,
+        "request": _redacted(jsonable(request), redact),
+        "response": {"cachemaxxing_usage": counts},
+    }

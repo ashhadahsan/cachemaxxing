@@ -340,3 +340,23 @@ def test_stats_is_thread_safe() -> None:
     finally:
         sys.setswitchinterval(old)
     assert s.calls == {"s": 16_000} and s.totals["s"].input == 160_000 and s.totals["s"].cache_read == 80_000
+
+
+def test_redacted_record_keeps_counts_and_structure_not_text() -> None:
+    req = {
+        "model": "claude-haiku-5-5",
+        "tools": [{"name": "lookup", "description": "secret tool doc"}],
+        "system": [{"type": "text", "text": "Customer jane@example.com"}],
+        "messages": [{"role": "user", "name": "jane", "content": "my card is 4111"}],
+    }
+    resp = {
+        "type": "message",
+        "model": "claude-haiku-5-5",
+        "content": [{"type": "text", "text": "the answer"}],
+        "usage": {"input_tokens": 100, "cache_read_input_tokens": 900, "output_tokens": 5},
+    }
+    line = json.dumps(record("s", req, resp, redact=lambda s: "#" * len(s)))
+    for secret in ("jane", "4111", "secret tool doc", "the answer"):
+        assert secret not in line
+    assert '"lookup"' in line and '"claude-haiku-5-5"' in line and '"user"' in line and '"text"' in line
+    assert usage(json.loads(line)["response"]) == usage(resp)

@@ -1,6 +1,7 @@
 """CacheMiddleware against real LangChain objects, offline: the handler is a stub, nothing is sent."""
 
 import asyncio
+import json
 from typing import Any
 
 import pytest
@@ -217,3 +218,12 @@ def test_bad_ttl_still_raises_before_sending() -> None:
             request(ChatOpenAI(model="gpt-6-luna", api_key="t")),
             reply("openai", "gpt-6-luna"),
         )
+
+
+def test_on_record_with_redact_holds_no_prompt_or_output_text() -> None:
+    lines: list[dict[str, Any]] = []
+    mw = CacheMiddleware("agent", on_record=lines.append, redact=lambda s: "x")
+    run(mw, request(ChatOpenAI(model="gpt-6-luna", api_key="t")), reply("openai", "gpt-6-luna"))
+    line = json.dumps(lines[0])
+    assert "You are helpful" not in line and '"hi"' not in line and '"ok"' not in line
+    assert lines[0]["response"]["cachemaxxing_usage"]["cache_read"] == 1500
