@@ -4,6 +4,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Fixed
+
+- `CacheMiddleware` and `CachedModel` no longer make a model call fail when adding cache fields or measuring the reply fails, including when your `on_record` raises. The call goes through, and a warning goes to the `cachemaxxing` logger. A wrong setting, such as a TTL the provider doesn't offer, still raises before anything is sent. `CacheMiddleware` now also checks the TTL when it is created.
+- `usage()` now raises only `ValueError` for responses it can't read. Before, some unexpected field types raised `AttributeError` or `TypeError`.
+
+### Changed
+
+- `cachemaxxing report` reads the log line by line instead of loading it whole. It skips lines it can't read and counts them on stderr; before, the first one stopped the report. Add `--strict` to stop at the first unreadable line, with exit code 2.
+
 ## [0.4.0] - 2026-10-31
 
 ### Added
