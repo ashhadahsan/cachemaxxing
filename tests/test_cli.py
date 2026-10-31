@@ -109,3 +109,16 @@ def test_report_html_dashboard_is_self_contained(tmp_path: Path, capsys: pytest.
 def test_docs_demo_dashboard_matches_the_template() -> None:
     page = Path("docs/demo.html").read_text(encoding="utf-8")
     assert dashboard.render(embedded(page)) == page, "run: uv run python benchmarks/demo.py --rerender"
+
+
+def test_report_skips_unreadable_lines_unless_strict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    good = [json.dumps(record("s", {"model": "m", "system": "x"}, anthropic_resp(r))) for r in (0, 900)]
+    log = tmp_path / "log.jsonl"
+    # line 2: not an object; line 3: no request; line 5: a writer still appending (truncated)
+    log.write_text("\n".join([good[0], "[1, 2]", '{"call_site": "s"}', good[1], '{"call_site": "s", "req']))
+    assert main(["report", str(log)]) == 0
+    out, err = capsys.readouterr()
+    assert "skipped 3 unreadable line(s)" in err and "line 2" in err
+    assert re.search(r"^s\s+2\s", out, re.M)  # both good records counted
+    assert main(["report", str(log), "--strict"]) == 2
+    assert "line 2" in capsys.readouterr().err
