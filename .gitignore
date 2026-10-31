@@ -17,3 +17,5 @@ wheels/
 
 # docs build
 site/
+canary.jsonl
+canary.html
