@@ -8,6 +8,9 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 - `Usage.saved`: USD saved compared with the same call without caching. It is negative when cache writes cost more than the reads saved. `Stats` and `report` show a `saved $` column.
 - `Usage.attributes()`: a call's cache metrics as flat keys for Langfuse or LangSmith metadata and OpenTelemetry span attributes.
+- `Prompt.messages(chat)` takes a chat kept as an OpenAI-style list of `{"role", "content"}` messages and renders it for any provider. Leading system messages become the cached system prompt. Gemini gets these turns converted to its own format.
+- Simple examples: `examples/chat.py`, a plain message list, and `examples/langchain_chat.py`, with `SystemMessage`, `HumanMessage` and `AIMessage`. The quickstart now shows where each provider's cache markers go and the exact request that is sent.
+- `call_site` is documented in the API reference and in the diagnosing guide.
 - `CacheMiddleware` and `CachedModel` attach these metrics to every reply as `response_metadata["cachemaxxing"]`.
 
 ## [0.3.0] - 2026-10-31

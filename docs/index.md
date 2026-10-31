@@ -9,18 +9,26 @@ Anthropic, OpenAI and Gemini bill a repeated prompt prefix at a fraction of the 
 3. **Fix.** `Prompt` orders your prompt from most to least stable and places each provider's cache markers for you.
 
 ```python
+from openai import OpenAI
 from cachemaxxing import Prompt, usage
 
-p = Prompt(call_site="support.answer")
-p.tools(TOOLS).system(SYSTEM).context(DOCS).history(messages).user(question)
+chat = [
+    {"role": "system", "content": SYSTEM},  # your long, fixed instructions: cached
+    {"role": "user", "content": "How do I reset my router?"},
+]
+p = Prompt(call_site="support.answer").messages(chat)  # call_site: any name for this call, used in reports
 
-resp = client.messages.create(max_tokens=1024, **p.anthropic("claude-haiku-5-5"))
+resp = OpenAI().chat.completions.create(**p.openai_chat("gpt-6-luna"))
+# same p: anthropic.messages.create(max_tokens=1024, **p.anthropic("claude-haiku-5-5"))
+#         genai_client.models.generate_content(**p.gemini("gemini-3.8-flash"))
 
 u = usage(resp)
 print(f"{u.hit_rate:.0%} of input from cache, ~${u.est_cost or 0:.4f}")
 ```
 
-The same `Prompt` renders for `p.openai(...)`, `p.openai_chat(...)`, `p.gemini(...)` and `p.litellm(...)`. It is a thin library, not a proxy: you keep your own SDK client.
+The system prompt and the conversation so far get the provider's cache markers, so each turn reads everything before the new question from cache. For tools, RAG chunks or a timestamp, build the prompt from parts: `p.tools(TOOLS).system(SYSTEM).history(chat).retrieved(chunks).user(question)`. The quickstart shows [where the markers go, and the exact request](quickstart.md).
+
+It is a thin library, not a proxy: you keep your own SDK client.
 
 ## Benchmark
 

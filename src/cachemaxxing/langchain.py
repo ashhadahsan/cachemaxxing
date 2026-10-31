@@ -147,7 +147,8 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         ttl: str | None = None,
         on_record: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
-        """`ttl`: "5m"/"1h" for Anthropic, "30m"/"12h" for OpenAI (defaults: 5m, 30m).
+        """`call_site`: your name for this agent in Stats, logs and traces (any string, see `Prompt`).
+        `ttl`: "5m"/"1h" for Anthropic, "30m"/"12h" for OpenAI (defaults: 5m, 30m).
         `on_record`: called with a `record()` dict per model call, e.g. to append it to a JSONL log."""
         super().__init__()
         self.call_site, self.ttl, self.on_record = call_site, ttl, on_record
@@ -199,7 +200,8 @@ class CachedModel(Runnable[Any, BaseMessage]):
         llm = CachedModel(init_chat_model("openai:gpt-6-luna").bind_tools(tools), system=SYSTEM, call_site="graph")
         ai = llm.invoke(state["messages"])     # in a node; llm.stats has hit rate and $ per call site
 
-    A leading SystemMessage in the input is used as is (and marked); otherwise `system` is prepended."""
+    A leading SystemMessage in the input is used as is (and marked); otherwise `system` is prepended.
+    `call_site` is your name for this model call in Stats, logs and traces (any string, see `Prompt`)."""
 
     def __init__(
         self,

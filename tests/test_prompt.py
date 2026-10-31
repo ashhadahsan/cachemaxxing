@@ -302,3 +302,37 @@ def test_diagnose_requests_the_providers_own_miss_reasons() -> None:
         p.openai_chat("gpt-6-luna", diagnose="resp_1")
     with pytest.raises(ValueError, match="GPT-5.6"):
         p.openai("gpt-5.5", diagnose="resp_1")
+
+
+CHAT = [
+    {"role": "system", "content": "You are a support bot."},
+    {"role": "user", "content": "How do I reset it?"},
+    {"role": "assistant", "content": "Hold the button for 10 s."},
+    {"role": "user", "content": "And the firmware?"},
+]
+
+
+def test_messages_takes_an_openai_style_chat_for_every_provider() -> None:
+    p = Prompt().messages(CHAT)
+    assert p.anthropic("m") == Prompt().system("You are a support bot.").history(CHAT[1:]).anthropic("m")
+    a = p.anthropic("claude-haiku-5-5")
+    assert a["system"] == [{"type": "text", "text": "You are a support bot.", "cache_control": CC}]
+    assert [m["role"] for m in a["messages"]] == ["user", "assistant", "user"]
+    assert a["messages"][-1]["content"] == [{"type": "text", "text": "And the firmware?", "cache_control": CC}]
+    o = p.openai_chat("gpt-6-luna")["messages"]
+    assert o[0] == {
+        "role": "system",
+        "content": [{"type": "text", "text": "You are a support bot.", "prompt_cache_breakpoint": BP}],
+    }
+    assert o[-1]["content"][-1]["prompt_cache_breakpoint"] == BP
+    g = p.gemini("gemini-3.8-flash")
+    assert g["config"]["system_instruction"] == {"parts": [{"text": "You are a support bot."}]}
+    assert g["contents"][1] == {"role": "model", "parts": [{"text": "Hold the button for 10 s."}]}
+    assert g["contents"][-1] == {"role": "user", "parts": [{"text": "And the firmware?"}]}
+
+
+def test_messages_text_parts_and_unconvertible_turns() -> None:
+    p = Prompt().messages([{"role": "developer", "content": [{"type": "text", "text": "S"}]}, *CHAT[1:]])
+    assert p.static == ["S"]
+    tool_turn = {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]}
+    assert Prompt().history([tool_turn]).gemini("g")["contents"] == [tool_turn]  # left for you to convert

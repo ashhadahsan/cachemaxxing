@@ -65,3 +65,16 @@ def test_gemini() -> None:
     resp = client.models.generate_content(**prompt(history).gemini("gemini-3.8-flash"))
     assert seen[0]["systemInstruction"]["parts"][0]["text"].startswith("S")
     assert usage(resp).cache_read == 4096
+
+
+def test_gemini_accepts_an_openai_style_chat() -> None:
+    types = pytest.importorskip("google.genai.types")
+    chat = [
+        {"role": "system", "content": "S"},
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "yo"},
+        {"role": "user", "content": "q"},
+    ]
+    kw = Prompt().messages(chat).gemini("gemini-3.8-flash")
+    types.GenerateContentConfig.model_validate(kw["config"])
+    assert [types.Content.model_validate(c).role for c in kw["contents"]] == ["user", "model", "user"]

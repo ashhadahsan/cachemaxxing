@@ -227,5 +227,6 @@ def _top(counts: dict[str, int]) -> str:
 
 
 def record(call_site: str, request: Any, response: Any) -> dict[str, Any]:
-    """One JSONL line for `cachemaxxing report`. The library never writes files; you do."""
+    """One JSONL line for `cachemaxxing report`. The library never writes files; you do.
+    `call_site` is your name for the place in your code that made the call (see `Prompt`)."""
     return {"call_site": call_site, "request": jsonable(request), "response": jsonable(response)}

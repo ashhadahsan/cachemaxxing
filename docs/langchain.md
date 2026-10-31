@@ -12,6 +12,35 @@ Install: `pip install "cachemaxxing[langchain]"`, plus your provider's LangChain
 
 All of them follow the same per-provider rules: an explicit breakpoint on the system prompt plus implicit mode on OpenAI GPT-5.6+, a `prompt_cache_key` on older OpenAI models, a system marker plus automatic tail caching on Anthropic, and nothing on Gemini, which caches implicitly.
 
+## The simplest case: a list of messages
+
+Wrap your chat model once with `CachedModel`, then call it with your `SystemMessage`, `HumanMessage` and `AIMessage` list, as you would call the model itself:
+
+```python
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import HumanMessage, SystemMessage
+from cachemaxxing.langchain import CachedModel
+
+llm = CachedModel(init_chat_model("openai:gpt-6-luna"), call_site="chat")
+messages = [SystemMessage(SYSTEM)]  # your long, fixed instructions
+
+for question in ["How do I reset my router?", "And how do I update its firmware?"]:
+    messages.append(HumanMessage(question))
+    reply = llm.invoke(messages)  # an AIMessage
+    messages.append(reply)
+
+print(llm.stats.table())  # hit rate and $ for the "chat" call site
+```
+
+The system prompt gets the provider's cache marker, and the conversation is cached as it grows. Plain dicts work too: `llm.invoke([{"role": "user", "content": "..."}])`. To run it, use [`examples/langchain_chat.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/langchain_chat.py):
+
+```console
+$ uv run --env-file .env python examples/langchain_chat.py anthropic
+How do I reset my router?              9,999 input tokens,  9,995 from cache
+And how do I update its firmware?     11,099 input tokens,  9,995 from cache
+Thanks! Is that safe?                 11,515 input tokens, 11,095 from cache
+```
+
 ## Cache an agent: `CacheMiddleware`
 
 For agents built with LangChain 1.x `create_agent`, which run on LangGraph:
