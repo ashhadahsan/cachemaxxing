@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-31
+
 ### Fixed
 
 - `CacheMiddleware` and `CachedModel` no longer make a model call fail when adding cache fields or measuring the reply fails, including when your `on_record` raises. The call goes through, and a warning goes to the `cachemaxxing` logger. A wrong setting, such as a TTL the provider doesn't offer, still raises before anything is sent. `CacheMiddleware` now also checks the TTL when it is created.
@@ -74,7 +76,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
 
-[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.1.0...v0.2.0
