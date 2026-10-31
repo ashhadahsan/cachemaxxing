@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from cachemaxxing.diff import Divergence, diff
+from cachemaxxing.diff import GENERIC_FIX, Divergence, diff
 
 SYS = "You are helpful. Today is 2026-10-30T10:00:00Z."
 BASE: dict[str, Any] = {
@@ -98,3 +98,11 @@ def test_context_shows_short_values_whole_and_long_ones_windowed() -> None:
     long_a, long_b = "x" * 200 + "A" + "y" * 200, "x" * 200 + "B" + "y" * 200
     d = diff(w(system=long_a), w(system=long_b))
     assert d is not None and d.offset == 200 and len(d.a) == 80 and d.a[40] == "A"
+
+
+def test_every_divergence_says_how_to_fix_it() -> None:
+    d = diff(BASE, w(system=[{"type": "text", "text": SYS.replace("10:00", "10:05")}]))
+    assert d is not None and d.fix.startswith("A time changes on every call")
+    assert str(d).endswith(f"fix: {d.fix}")
+    unknown = diff(w(system="alpha"), w(system="beta"))
+    assert unknown is not None and unknown.hint is None and unknown.fix == GENERIC_FIX

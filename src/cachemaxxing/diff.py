@@ -23,6 +23,24 @@ _HINTS = (
     ("hex id", re.compile(r"\b[0-9a-f]{16,}\b")),
 )
 
+FIXES = {  # what to do about each hint: shown by warnings, `report`, `cachemaxxing diff` and the dashboard
+    "timestamp": "A time changes on every call. Move it into .retrieved(), after the cached prefix.",
+    "uuid": "An id changes on every call. Drop it from the prompt, or move it into .retrieved().",
+    "hex id": "An id changes on every call. Drop it from the prompt, or move it into .retrieved().",
+    "tool order": "The same tools arrive in a different order. Pass them through Prompt.tools(), which sorts them.",
+    "key order": "The same JSON is serialized with another key order. Pass dicts to Prompt, or use canonical_json().",
+    "whitespace": "Only whitespace differs. Prompt normalizes whitespace in system, context and examples.",
+    "model": "The model changed. Different models never share a cache.",
+    "removed": "This call dropped part of the previous one, such as trimmed history. Trim less often, in bigger steps.",
+    "last turn": "Only the newest turn differs: that is how a conversation grows, not a miss.",
+}
+GENERIC_FIX = "Anything that changes per request belongs after the cached prefix: in .retrieved() or .user()."
+NO_READ = "prefix ok, no cache read"
+NO_READ_WHY = (
+    "The request repeated the previous one, but nothing was read from cache: the cache expired (the TTL counts "
+    "from the previous request), the prefix is below the provider's minimum, or the request reached another server."
+)
+
 
 @dataclass(frozen=True)
 class Divergence:
@@ -37,8 +55,13 @@ class Divergence:
         why = f" ({self.hint})" if self.hint else ""
         return (
             f"diverges at {self.path} char {self.offset}{why}, after ~{self.prefix_chars // 4:,} matching tokens\n"
-            f"  a: {self.a!r}\n  b: {self.b!r}"
+            f"  a: {self.a!r}\n  b: {self.b!r}\n  fix: {self.fix}"
         )
+
+    @property
+    def fix(self) -> str:
+        """What to change so the next request repeats this one's prefix."""
+        return FIXES.get(self.hint or "", GENERIC_FIX)
 
 
 def _leaves(x: Any, path: str) -> Iterator[tuple[str, str]]:

@@ -1,5 +1,6 @@
 class Decision(cache: 'bool', ttl: 'str | None', saving: 'float', reason: 'str') -> None
 class Divergence(path: 'str', offset: 'int', a: 'str', b: 'str', hint: 'str | None', prefix_chars: 'int') -> None
+  Divergence.fix: property
 class Prompt(call_site: 'str' = 'default') -> 'None'
   Prompt.anthropic(self, model: 'str', *, ttl: 'str' = '5m', diagnose: 'bool | str' = False) -> 'Json'
   Prompt.context(self, docs: 'Parts', *, reorderable: 'bool' = False) -> 'Self'
