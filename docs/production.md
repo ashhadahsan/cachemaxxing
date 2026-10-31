@@ -15,7 +15,7 @@ How to adopt cachemaxxing safely, what it does when something goes wrong, and wh
 ## Pin the version
 
 ```
-cachemaxxing~=0.9      # now
+cachemaxxing~=0.10     # now
 cachemaxxing~=1.0      # from 1.0: any 1.x release is a safe upgrade
 ```
 
