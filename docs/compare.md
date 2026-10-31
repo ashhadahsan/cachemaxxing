@@ -15,7 +15,7 @@ cachemaxxing is a small library that works on the request you are about to send 
 
 ## Compared with the providers' own automatic caching
 
-Measured on 2026-10-30 with the same content laid out cleanly. See the [benchmark](index.md#benchmark).
+Measured on 2026-10-30 with the same content laid out cleanly. See the [benchmark](overview.md#benchmark).
 
 - **Anthropic automatic caching** (top-level `cache_control`) paid write premiums on every call and read nothing back whenever the last message carried per-turn context. It cost more than not caching at all. cachemaxxing's breakpoints were 82–89% cheaper.
 - **Gemini implicit caching** reached 39–56% of input. cachemaxxing's explicit cache, used only when it pays, reached 88–97% and was 62–67% cheaper.

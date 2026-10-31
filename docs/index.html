@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cachemaxxing: stop paying full price for the same tokens</title>
+<meta name="description" content="A zero-dependency Python library that measures your LLM prompt-cache hit rate, finds the byte where your prompts stop repeating, and lays them out so Anthropic, OpenAI and Gemini bill the repeat at the cached rate.">
+<meta property="og:title" content="cachemaxxing">
+<meta property="og:description" content="Stop paying full price for the same tokens. Prompt-cache hit rate, drift diagnosis and cache-friendly layouts for Anthropic, OpenAI and Gemini.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ashhadahsan.github.io/cachemaxxing/">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f4f4f1; --surface: #fcfcfb; --surface-2: #ecebe7; --border: rgba(11, 11, 11, .10);
+  --ink: #0b0b0b; --ink-2: #4a4945; --muted: #6b6a65;
+  --accent: #e2551f; --accent-ink: #ffffff; --glow: rgba(235, 104, 52, .16);
+  --code-bg: #16161a; --code-ink: #e8e6e1; --code-muted: #8b8a85;
+  --k: #ff9a6b; --s: #9ad1a0; --f: #8ab4f8; --n: #e5c07b;
+  --good: #0ca30c;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #161615; --surface-2: #222220; --border: rgba(255, 255, 255, .10);
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a988f;
+    --accent: #eb6834; --accent-ink: #0b0b0b; --glow: rgba(235, 104, 52, .20);
+    --code-bg: #111113;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #161615; --surface-2: #222220; --border: rgba(255, 255, 255, .10);
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a988f;
+  --accent: #eb6834; --accent-ink: #0b0b0b; --glow: rgba(235, 104, 52, .20);
+  --code-bg: #111113;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 var(--sans); }
+a { color: inherit; }
+code, pre { font-family: var(--mono); }
+h1, h2, h3 { margin: 0; line-height: 1.15; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--surface); padding: 8px 12px; z-index: 100; }
+.skip:focus { left: 16px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 768px) { .wrap { padding: 0 32px; } }
+svg { flex: none; }
+
+/* nav */
+.nav { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--page) 92%, transparent); border-bottom: 1px solid var(--border); }
+.nav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; }
+.brand img { width: 28px; height: 28px; }
+.links { display: flex; align-items: center; gap: 4px; }
+.links a { text-decoration: none; color: var(--ink-2); font-size: 15px; padding: 8px 10px; border-radius: 8px; transition: color .15s, background .15s; }
+.links a:hover { color: var(--ink); background: var(--surface-2); }
+.icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--ink-2); cursor: pointer; transition: color .15s, background .15s; }
+.icon-btn:hover { color: var(--ink); background: var(--surface-2); }
+.icon-btn svg { width: 18px; height: 18px; }
+@media (max-width: 640px) { .links .hide-sm { display: none; } }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px; border-radius: 10px;
+  font: 500 15px var(--sans); text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform .15s, background .15s, border-color .15s; }
+.btn svg { width: 18px; height: 18px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { transform: translateY(-1px); }
+.btn.ghost { border-color: var(--border); background: var(--surface); color: var(--ink); }
+.btn.ghost:hover { border-color: var(--ink-2); }
+.install { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 4px 4px 14px; border-radius: 10px;
+  background: var(--code-bg); color: var(--code-ink); border: 1px solid rgba(255, 255, 255, .08); font: 14px var(--mono); }
+.install .prompt { color: var(--code-muted); margin-right: 6px; user-select: none; }
+.install button { display: inline-grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--code-muted); cursor: pointer; transition: color .15s, background .15s; }
+.install button:hover { color: var(--code-ink); background: rgba(255, 255, 255, .08); }
+.install button svg { width: 16px; height: 16px; }
+
+/* hero */
+.hero { position: relative; overflow: hidden; padding: 72px 0 56px; text-align: center; }
+.hero::before { content: ""; position: absolute; inset: -40% -20% auto; height: 720px; pointer-events: none;
+  background: radial-gradient(closest-side, var(--glow), transparent); }
+.hero .wrap { position: relative; display: grid; justify-items: center; gap: 22px; }
+.eyebrow { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); font-size: 14px; }
+.eyebrow span { display: inline-flex; align-items: center; gap: 6px; }
+.eyebrow svg { width: 14px; height: 14px; color: var(--good); }
+.hero h1 { font-size: clamp(36px, 6.4vw, 68px); font-weight: 700; letter-spacing: -.035em; max-width: 14ch; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.lede { font-size: clamp(17px, 2.1vw, 20px); color: var(--ink-2); max-width: 62ch; }
+.ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+
+/* code window */
+.window { width: 100%; max-width: 900px; margin-top: 18px; border-radius: 14px; overflow: hidden; text-align: left;
+  background: var(--code-bg); color: var(--code-ink); border: 1px solid rgba(255, 255, 255, .08); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .55); }
+.bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, .07); color: var(--code-muted); font: 13px var(--mono); }
+.bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a3f; }
+.bar span { margin-left: 8px; }
+pre { margin: 0; padding: 18px 20px; overflow-x: auto; font-size: 14px; line-height: 1.7; tab-size: 4; }
+.term { border-top: 1px solid rgba(255, 255, 255, .07); background: rgba(255, 255, 255, .02); }
+.k { color: var(--k); } .s { color: var(--s); } .f { color: var(--f); } .n { color: var(--n); } .c { color: var(--code-muted); }
+.hit { color: #7ee2a0; }
+
+/* stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 8px 0 24px; }
+.stat { padding: 20px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.stat b { display: block; font-size: 40px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
+.stat p { color: var(--ink-2); font-size: 15px; margin-top: 6px; }
+
+/* sections */
+section.block { padding: 72px 0; }
+.head { display: grid; gap: 12px; max-width: 720px; margin-bottom: 36px; }
+.kicker { font: 500 13px var(--mono); color: var(--accent); letter-spacing: .02em; }
+.head h2 { font-size: clamp(28px, 4vw, 42px); font-weight: 700; letter-spacing: -.025em; }
+.head p { color: var(--ink-2); font-size: 18px; }
+.features { display: grid; gap: 16px; }
+.feature { display: grid; gap: 12px 40px; align-items: center; padding: 28px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+.feature .text { display: grid; gap: 12px; align-content: start; }
+@media (min-width: 900px) { .feature { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); } }
+.feature .ico { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--glow); color: var(--accent); }
+.feature .ico svg { width: 20px; height: 20px; }
+.feature h3 { font-size: 21px; font-weight: 600; }
+.feature p { color: var(--ink-2); }
+.feature pre { padding: 16px 18px; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); font-size: 13px; line-height: 1.7; }
+.feature code { font-size: .9em; }
+
+.frame { border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 30px 80px -40px rgba(0, 0, 0, .45); }
+.frame .bar { background: var(--surface-2); color: var(--muted); border-bottom: 1px solid var(--border); }
+.frame .bar i { background: var(--border); }
+.frame iframe { display: block; width: 100%; height: 760px; border: 0; background: var(--page); }
+@media (max-width: 640px) { .frame iframe { height: 620px; } }
+.under { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 18px; color: var(--ink-2); }
+.under code { font-size: 14px; }
+
+.bench { display: grid; gap: 32px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 960px) { .bench { grid-template-columns: 1.25fr 1fr; } }
+.bench img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border); }
+.points { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.points li { padding-left: 18px; border-left: 2px solid var(--border); }
+.points b { display: block; font-size: 17px; margin-bottom: 2px; }
+.points p { color: var(--ink-2); font-size: 15px; }
+
+.works { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.work { display: grid; gap: 4px; padding: 16px 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); text-decoration: none; transition: border-color .15s; }
+.work:hover { border-color: var(--ink-2); }
+.work strong { font-weight: 600; }
+.work code { color: var(--ink-2); font-size: 13px; }
+
+.final { text-align: center; padding: 88px 0; }
+.final .wrap { display: grid; justify-items: center; gap: 20px; }
+.final h2 { font-size: clamp(30px, 4.6vw, 48px); font-weight: 700; letter-spacing: -.03em; max-width: 18ch; }
+.final p { color: var(--ink-2); font-size: 18px; max-width: 56ch; }
+footer { border-top: 1px solid var(--border); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
+footer a { color: var(--ink-2); text-decoration: none; }
+footer a:hover { color: var(--ink); text-decoration: underline; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise { animation: rise .6s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+}
+@media (max-width: 520px) {
+  .hero { padding: 48px 0 40px; }
+  section.block { padding: 56px 0; }
+  pre { font-size: 12.5px; padding: 14px 16px; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28"><span>cachemaxxing</span></a>
+    <nav class="links" aria-label="Main">
+      <a href="quickstart/">Docs</a>
+      <a class="hide-sm" href="#demo">Dashboard</a>
+      <a class="hide-sm" href="#benchmarks">Benchmarks</a>
+      <a href="https://github.com/ashhadahsan/cachemaxxing" aria-label="cachemaxxing on GitHub" style="display:inline-grid;place-items:center">
+        <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+      </a>
+      <button class="icon-btn" id="theme" type="button" aria-label="Switch theme"></button>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow rise">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Open source, MIT</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Zero dependencies</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Your own SDK client</span>
+      </p>
+      <h1 class="rise" style="--i:1">Stop paying full price for <em>the same tokens.</em></h1>
+      <p class="lede rise" style="--i:2">Anthropic, OpenAI and Gemini bill a repeated prompt prefix at a fraction of the input price, but only when the bytes really repeat. cachemaxxing measures your hit rate, finds the byte where your prompts stop repeating, and lays them out so they do.</p>
+      <div class="ctas rise" style="--i:3">
+        <a class="btn primary" href="quickstart/">Get started
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <div class="install"><span class="prompt">$</span><code>pip install cachemaxxing</code>
+          <button type="button" class="copy" data-copy="pip install cachemaxxing" aria-label="Copy the install command"></button></div>
+      </div>
+      <div class="window rise" style="--i:4" role="img" aria-label="Example: a chat list passed to Prompt().messages(), and the output of three turns with 99% of the input read from cache from the second turn on">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>chat.py</span></div>
+<pre aria-hidden="true"><span class="k">from</span> cachemaxxing <span class="k">import</span> Prompt, usage
+
+chat = [{<span class="s">"role"</span>: <span class="s">"system"</span>, <span class="s">"content"</span>: SYSTEM},          <span class="c"># long, fixed instructions</span>
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"How do I reset my router?"</span>}]
+
+p = <span class="f">Prompt</span>(<span class="s">"support.answer"</span>).<span class="f">messages</span>(chat)          <span class="c"># same list you already keep</span>
+resp = client.chat.completions.<span class="f">create</span>(**p.<span class="f">openai_chat</span>(<span class="s">"gpt-6-luna"</span>))
+<span class="f">print</span>(<span class="s">f"</span>{<span class="f">usage</span>(resp).hit_rate<span class="n">:.0%</span>}<span class="s"> from cache"</span>)</pre>
+<pre class="term" aria-hidden="true"><span class="c">$ python examples/chat.py openai</span>
+How do I reset my router?             6,283 input tokens,      0 from cache (0%)
+And how do I update its firmware?     6,347 input tokens,  6,280 from cache <span class="hit">(99%)</span>
+Thanks! Is that safe?                 6,433 input tokens,  6,344 from cache <span class="hit">(99%)</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="stats" aria-label="Results">
+      <div class="stat"><b>76–88%</b><p>lower input cost than a typical app, for chat and RAG on every model we benchmarked</p></div>
+      <div class="stat"><b>98–99%</b><p>of the input read from cache from the second turn of a chat, on OpenAI and Anthropic</p></div>
+      <div class="stat"><b>0</b><p>runtime dependencies. You keep your own Anthropic, OpenAI, Gemini or LiteLLM client</p></div>
+    </div>
+  </div>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="head">
+        <span class="kicker">// measure → diagnose → fix</span>
+        <h2>A cache miss never raises an error. The bill is just higher.</h2>
+        <p>The only ground truth is the usage the provider sends back. cachemaxxing starts there.</p>
+      </div>
+      <div class="features">
+        <article class="feature">
+          <div class="text">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
+          <h3>Measure</h3>
+          <p><code>usage()</code> turns any provider's response into the same numbers: input, cache read and write, output, hit rate, $ spent and $ saved.</p>
+          </div>
+<pre><span class="k">$</span> cachemaxxing report calls.jsonl --min-hit-rate 0.6
+call site     calls  hit rate  est $   saved $
+rag.answer    5      71.7%     0.0034  0.0024
+support.chat  6      82.8%     0.0017  0.0028</pre>
+        </article>
+        <article class="feature">
+          <div class="text">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+          <h3>Diagnose</h3>
+          <p><code>cachemaxxing diff</code> shows the first byte where two requests stop matching, and names the likely cause: a timestamp, an id, tool order or JSON key order.</p>
+          </div>
+<pre><span class="k">$</span> cachemaxxing diff request_1.json request_2.json
+diverges at system[0].text char 41 (timestamp), after ~14 matching tokens
+  a: 'You are helpful. Today is 2026-10-30T10:<span class="n">00</span>:00Z.'
+  b: 'You are helpful. Today is 2026-10-30T10:<span class="n">05</span>:00Z.'</pre>
+        </article>
+        <article class="feature">
+          <div class="text">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4Z"/></svg></span>
+          <h3>Fix</h3>
+          <p><code>Prompt</code> puts the stable parts first and places each provider's cache markers: on the system prompt, and on the conversation so far.</p>
+          </div>
+<pre>p = <span class="f">Prompt</span>(<span class="s">"rag.answer"</span>)
+p.<span class="f">system</span>(SYSTEM).<span class="f">history</span>(chat)
+p.<span class="f">retrieved</span>(chunks).<span class="f">user</span>(question)
+kw = p.<span class="f">anthropic</span>(<span class="s">"claude-haiku-5-5"</span>)</pre>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="demo" style="padding-top:24px">
+    <div class="wrap">
+      <div class="head">
+        <span class="kicker">// cachemaxxing report --html</span>
+        <h2>Every call site at a glance</h2>
+        <p>One self-contained page from your call log: hit rate per call, spend and savings per call site, and the exact byte that changed, with the fix. It makes no network requests, so your prompts stay on your machine.</p>
+      </div>
+      <div class="frame">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>report.html</span></div>
+        <iframe src="demo.html" title="Demo dashboard built from a real log of 20 calls" loading="lazy"></iframe>
+      </div>
+      <div class="under">
+        <code>cachemaxxing report calls.jsonl --html report.html</code>
+        <a href="demo.html">Open the demo full screen</a>
+        <a href="monitoring/">Langfuse, LangSmith and OpenTelemetry</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="benchmarks" style="padding-top:24px">
+    <div class="wrap">
+      <div class="head">
+        <span class="kicker">// benchmarks, real API calls</span>
+        <h2>Measured, including where it matters less</h2>
+        <p>Same content in three layouts: a typical app, a clean prompt with the provider's own automatic caching, and cachemaxxing.</p>
+      </div>
+      <div class="bench">
+        <img src="assets/benchmark.svg" alt="Cached input tokens per conversation for naive, clean with provider auto-caching, and cachemaxxing, on Anthropic, OpenAI and Gemini, for chat and RAG" loading="lazy" width="760" height="622">
+        <ul class="points">
+          <li><b>Against a typical app: 76–88% cheaper</b><p>Input cost for chat and RAG, on every model. The usual culprits are a timestamp in the system prompt, shuffled tools and re-rendered history.</p></li>
+          <li><b>Anthropic: 82–89% cheaper than automatic caching</b><p>Automatic caching puts its one cache entry after the per-turn context, so every call pays the write premium and reads nothing back.</p></li>
+          <li><b>Gemini: 62–67% cheaper</b><p>Implicit caching is best-effort. An explicit cache, created only when it pays, read 88–97% of the input.</p></li>
+          <li><b>OpenAI: 6–19% cheaper</b><p>OpenAI's implicit caching already finds a stable prefix. The win there is fixing the habits, plus the measurements.</p></li>
+        </ul>
+      </div>
+      <div class="under"><a href="overview/#benchmark">Full results table</a><a href="https://github.com/ashhadahsan/cachemaxxing/tree/main/benchmarks">Run the benchmarks yourself</a></div>
+    </div>
+  </section>
+
+  <section class="block" id="works" style="padding-top:24px">
+    <div class="wrap">
+      <div class="head">
+        <span class="kicker">// works with</span>
+        <h2>Your stack, your client</h2>
+        <p>A thin library, not a proxy. It returns request arguments and reads responses; you make the call.</p>
+      </div>
+      <div class="works">
+        <a class="work" href="quickstart/"><strong>Anthropic</strong><code>p.anthropic(model)</code></a>
+        <a class="work" href="quickstart/"><strong>OpenAI</strong><code>p.openai(model) · p.openai_chat(model)</code></a>
+        <a class="work" href="quickstart/"><strong>Gemini</strong><code>p.gemini(model) · gemini_cache()</code></a>
+        <a class="work" href="quickstart/"><strong>LiteLLM</strong><code>p.litellm("anthropic/...")</code></a>
+        <a class="work" href="langchain/"><strong>LangChain and LangGraph</strong><code>CachedModel(llm) · CacheMiddleware()</code></a>
+        <a class="work" href="monitoring/"><strong>Langfuse, LangSmith, OpenTelemetry</strong><code>usage(resp).attributes()</code></a>
+        <a class="work" href="diagnosing/#gate-it-in-ci"><strong>GitHub Actions</strong><code>uses: ashhadahsan/cachemaxxing</code></a>
+        <a class="work" href="caching/"><strong>Explicit-cache economics</strong><code>should_cache(tokens, reuses, ...)</code></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Find out what your prompts really cost.</h2>
+      <p>Log a day of calls, run the report, and fix the call site at the top of the list.</p>
+      <div class="ctas">
+        <div class="install"><span class="prompt">$</span><code>pip install cachemaxxing</code>
+          <button type="button" class="copy" data-copy="pip install cachemaxxing" aria-label="Copy the install command"></button></div>
+        <a class="btn ghost" href="quickstart/">Read the quickstart</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MIT license · © 2026 Ashhad Ahsan</span>
+    <nav aria-label="Footer">
+      <a href="quickstart/">Docs</a>
+      <a href="changelog/">Changelog</a>
+      <a href="https://pypi.org/project/cachemaxxing/">PyPI</a>
+      <a href="https://github.com/ashhadahsan/cachemaxxing">GitHub</a>
+    </nav>
+  </div>
+</footer>
+<p class="skip" id="live" aria-live="polite"></p>
+
+<script>
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const PATHS = {
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
+  check: "M20 6 9 17l-5-5",
+  sun: "M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
+  moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z",
+};
+function icon(name) {
+  const s = document.createElementNS(NS, "svg");
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" })) s.setAttribute(k, v);
+  const p = document.createElementNS(NS, "path");
+  p.setAttribute("d", PATHS[name]);
+  s.append(p);
+  return s;
+}
+for (const b of document.querySelectorAll(".copy")) {
+  b.append(icon("copy"));
+  b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { return; }
+    b.replaceChildren(icon("check"));
+    document.getElementById("live").textContent = "Copied";
+    setTimeout(() => b.replaceChildren(icon("copy")), 1600);
+  });
+}
+// The same key as the report page, so the demo dashboard opens in the theme you picked here.
+const root = document.documentElement, themeBtn = document.getElementById("theme");
+function setTheme(t) {
+  root.dataset.theme = t;
+  themeBtn.replaceChildren(icon(t === "dark" ? "sun" : "moon"));
+  themeBtn.setAttribute("aria-label", t === "dark" ? "Switch to light theme" : "Switch to dark theme");
+}
+let saved = null;
+try { saved = localStorage.getItem("cachemaxxing-theme"); } catch (e) {}
+setTheme(saved || root.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+themeBtn.addEventListener("click", () => {
+  const next = root.dataset.theme === "dark" ? "light" : "dark";
+  setTheme(next);
+  try { localStorage.setItem("cachemaxxing-theme", next); } catch (e) {}
+  try { document.querySelector("#demo iframe").contentWindow.location.reload(); } catch (e) {}  // the demo reads the same key
+});
+</script>
+</body>
+</html>
