@@ -1,0 +1,16 @@
+name: Wrong or missing price or limit
+description: A model's price, minimum cacheable tokens or TTL is wrong or missing
+labels: [facts]
+body:
+  - type: input
+    id: model
+    attributes: {label: Model, placeholder: "gpt-6.1-sol"}
+    validations: {required: true}
+  - type: textarea
+    id: change
+    attributes: {label: What is wrong, and the correct value}
+    validations: {required: true}
+  - type: input
+    id: source
+    attributes: {label: Source (the provider's pricing or docs page)}
+    validations: {required: true}

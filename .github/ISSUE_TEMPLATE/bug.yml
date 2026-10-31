@@ -1,0 +1,22 @@
+name: Bug
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: {label: cachemaxxing version, placeholder: "0.9.0"}
+    validations: {required: true}
+  - type: input
+    id: provider
+    attributes: {label: Provider, SDK and version, placeholder: "anthropic 2.3.0, claude-haiku-5-5"}
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal example
+      description: The smallest code that shows the problem. Remove API keys and private prompt text.
+      render: python
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: What you expected, and what happened instead}
+    validations: {required: true}
