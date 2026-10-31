@@ -5,7 +5,7 @@
 Anthropic, OpenAI and Gemini bill a repeated prompt prefix at a fraction of the input price, but only when the bytes really repeat. cachemaxxing finds where they don't, tells you what it costs, and lays your prompts out so they do.
 
 1. **Measure.** `usage()` turns every provider's response into the same numbers: input, cache read, cache write, output, estimated $ and hit rate. `cachemaxxing report` totals them per call site.
-2. **Diagnose.** `cachemaxxing diff` shows the first byte where two consecutive requests diverge, and why: a timestamp, a UUID, tool order, JSON key order.
+2. **Diagnose.** Give `Stats` each request and it tells you, as soon as it happens, the first byte where a request stopped repeating the previous one, why (a timestamp, a UUID, tool order, JSON key order) and how to fix it. `cachemaxxing report` prints the same from a log.
 3. **Fix.** `Prompt` orders your prompt from most to least stable and places each provider's cache markers for you.
 
 ```python
@@ -29,6 +29,8 @@ print(f"{u.hit_rate:.0%} of input from cache, ~${u.est_cost or 0:.4f}")
 The system prompt and the conversation so far get the provider's cache markers, so each turn reads everything before the new question from cache. For tools, RAG chunks or a timestamp, build the prompt from parts: `p.tools(TOOLS).system(SYSTEM).history(chat).retrieved(chunks).user(question)`. The quickstart shows [where the markers go, and the exact request](quickstart.md).
 
 It is a thin library, not a proxy: you keep your own SDK client.
+
+**New here?** The [tutorial](tutorial.md) takes ten minutes, from a broken cache to a fixed one.
 
 ## Benchmark
 

@@ -206,7 +206,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <h1 class="rise" style="--i:1">Stop paying full price for <em>the same tokens.</em></h1>
       <p class="lede rise" style="--i:2">Anthropic, OpenAI and Gemini bill a repeated prompt prefix at a fraction of the input price, but only when the bytes really repeat. cachemaxxing measures your hit rate, finds the byte where your prompts stop repeating, and lays them out so they do.</p>
       <div class="ctas rise" style="--i:3">
-        <a class="btn primary" href="quickstart/">Get started
+        <a class="btn primary" href="tutorial/">Get started
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
         <div class="install"><span class="prompt">$</span><code>pip install cachemaxxing</code>
           <button type="button" class="copy" data-copy="pip install cachemaxxing" aria-label="Copy the install command"></button></div>
@@ -260,12 +260,14 @@ support.chat  6      82.8%     0.0017  0.0028</pre>
           <div class="text">
           <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
           <h3>Diagnose</h3>
-          <p><code>cachemaxxing diff</code> shows the first byte where two requests stop matching, and names the likely cause: a timestamp, an id, tool order or JSON key order.</p>
+          <p>Pass each request to <code>Stats</code> and it tells you as soon as the cache breaks: the first byte that changed, the likely cause (a timestamp, an id, tool order or JSON key order) and the fix.</p>
           </div>
-<pre><span class="k">$</span> cachemaxxing diff request_1.json request_2.json
-diverges at system[0].text char 41 (timestamp), after ~14 matching tokens
-  a: 'You are helpful. Today is 2026-10-30T10:<span class="n">00</span>:00Z.'
-  b: 'You are helpful. Today is 2026-10-30T10:<span class="n">05</span>:00Z.'</pre>
+<pre><span class="c">stats.add("support.answer", usage(resp), request=kw)</span>
+WARNING cachemaxxing: support.answer: the cached prefix broke:
+diverges at messages[0].content[0].text char 31 (timestamp)
+  a: 'Current time: 2026-10-31T21:57:<span class="n">27.105469</span>+00:00'
+  b: 'Current time: 2026-10-31T21:57:<span class="n">32.635435</span>+00:00'
+  fix: A time changes on every call. Move it into .retrieved().</pre>
         </article>
         <article class="feature">
           <div class="text">

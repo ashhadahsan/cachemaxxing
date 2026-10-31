@@ -156,4 +156,4 @@ uv run --env-file .env python examples/quickstart.py anthropic   # or openai, ge
 --8<-- "examples/quickstart.py"
 ```
 
-Next: [log your calls and find the misses](diagnosing.md).
+Next: the [tutorial](tutorial.md) finds and fixes a real cache miss, step by step. To log your calls and find misses in production, see [Diagnosing](diagnosing.md).
