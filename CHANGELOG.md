@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 ### Added
 
 - `diagnose=` on `anthropic()` and `openai()` requests the provider's own cache-miss verdict (Anthropic cache diagnostics, OpenAI prompt-cache diagnostics). `usage(...).miss_reason` carries it, and `Stats` and `report` show it per call site.
@@ -50,6 +52,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
 
-[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ashhadahsan/cachemaxxing/releases/tag/v0.1.0
