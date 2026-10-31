@@ -1,0 +1,49 @@
+class Decision(cache: 'bool', ttl: 'str | None', saving: 'float', reason: 'str') -> None
+class Divergence(path: 'str', offset: 'int', a: 'str', b: 'str', hint: 'str | None', prefix_chars: 'int') -> None
+class Prompt(call_site: 'str' = 'default') -> 'None'
+  Prompt.anthropic(self, model: 'str', *, ttl: 'str' = '5m', diagnose: 'bool | str' = False) -> 'Json'
+  Prompt.context(self, docs: 'Parts', *, reorderable: 'bool' = False) -> 'Self'
+  Prompt.est_prefix_tokens(self) -> 'int'
+  Prompt.examples(self, examples: 'Parts', *, reorderable: 'bool' = False) -> 'Self'
+  Prompt.gemini(self, model: 'str', *, cached_content: 'str | None' = None) -> 'Json'
+  Prompt.gemini_prefix(self) -> 'Json'
+  Prompt.history(self, messages: 'Sequence[Any]') -> 'Self'
+  Prompt.litellm(self, model: 'str', *, ttl: 'str | None' = None, explicit: 'bool' = False) -> 'Json'
+  Prompt.messages(self, messages: 'Sequence[Any]') -> 'Self'
+  Prompt.openai(self, model: 'str', *, ttl: 'str' = '30m', cache_key: 'str | None' = None, diagnose: 'bool | str' = False) -> 'Json'
+  Prompt.openai_chat(self, model: 'str', *, ttl: 'str' = '30m', cache_key: 'str | None' = None, diagnose: 'bool | str' = False) -> 'Json'
+  Prompt.prefix_hash(self) -> 'str'
+  Prompt.retrieved(self, chunks: 'Parts') -> 'Self'
+  Prompt.static: property
+  Prompt.system(self, text: 'Parts') -> 'Self'
+  Prompt.tools(self, tools: 'Sequence[Any]', *, sort: 'bool' = True) -> 'Self'
+  Prompt.user(self, text: 'str') -> 'Self'
+class Stats() -> 'None'
+  Stats.add(self, call_site: 'str', u: 'Usage') -> 'None'
+  Stats.table(self, notes: 'dict[str, str] | None' = None) -> 'str'
+class Usage(provider: 'str', model: 'str', input: 'int' = 0, cache_read: 'int' = 0, cache_write: 'int' = 0, output: 'int' = 0, est_cost: 'float | None' = None, saved: 'float | None' = None, miss_reason: 'str | None' = None) -> None
+  Usage.attributes(self, call_site: 'str | None' = None, *, prefix: 'str' = 'cachemaxxing.') -> 'dict[str, str | int | float]'
+  Usage.hit_rate: property
+canonical_json(obj: 'Any') -> 'str'
+diff(a: 'Any', b: 'Any') -> 'Divergence | None'
+gemini_cache(client: 'Any', p: 'Prompt', model: 'str', *, expected_reuses: 'int', interval_s: 'float' = 60.0, prefix_tokens: 'int | None' = None) -> 'str | None'
+gemini_cache_async(client: 'Any', p: 'Prompt', model: 'str', *, expected_reuses: 'int', interval_s: 'float' = 60.0, prefix_tokens: 'int | None' = None) -> 'str | None'
+record(call_site: 'str', request: 'Any', response: 'Any', *, redact: 'Callable[[str], str] | None' = None) -> 'dict[str, Any]'
+should_cache(prefix_tokens: 'int', expected_reuses: 'int', provider: 'str', model: 'str', *, interval_s: 'float' = 60.0) -> 'Decision'
+usage(response: 'Any', model: 'str | None' = None) -> 'Usage'
+class langchain.CacheMiddleware(call_site: 'str' = 'agent', *, ttl: 'str | None' = None, on_record: 'Callable[[dict[str, Any]], None] | None' = None, redact: 'Callable[[str], str] | None' = None) -> 'None'
+  langchain.CacheMiddleware.awrap_model_call(self, request: 'ModelRequest[Any]', handler: 'Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]]') -> 'Any'
+  langchain.CacheMiddleware.wrap_model_call(self, request: 'ModelRequest[Any]', handler: 'Callable[[ModelRequest[Any]], ModelResponse[Any]]') -> 'Any'
+class langchain.CachedModel(model: 'Runnable[Any, Any]', *, system: 'SystemMessage | str | None' = None, call_site: 'str' = 'graph', ttl: 'str | None' = None, on_record: 'Callable[[dict[str, Any]], None] | None' = None, redact: 'Callable[[str], str] | None' = None) -> 'None'
+  langchain.CachedModel.ainvoke(self, input: 'Any', config: 'RunnableConfig | None' = None, **kwargs: 'Any') -> 'BaseMessage'
+  langchain.CachedModel.invoke(self, input: 'Any', config: 'RunnableConfig | None' = None, **kwargs: 'Any') -> 'BaseMessage'
+langchain.cache_fields(model: 'Any', system: 'SystemMessage | str | None' = None, *, call_site: 'str' = 'graph', ttl: 'str | None' = None, tools: 'Sequence[Any]' = ()) -> 'tuple[SystemMessage | None, dict[str, Any]]'
+facts.MODELS: dict
+class facts.Model(provider: 'str', input: 'float', output: 'float', cache_read: 'float', cache_write: 'dict[str, float]' = <factory>, min_tokens: 'int' = 1024, storage_hour: 'float | None' = None, long_context: 'tuple[int, Model] | None' = None, source: 'str' = '') -> None
+facts.PROVIDERS: dict
+class facts.Provider(max_breakpoints: 'int | None', ttls: 'tuple[str, ...]', docs: 'str') -> None
+facts.VERIFIED: str
+facts.find(model: 'str') -> 'Model | None'
+facts.provider_of(model: 'str') -> 'str'
+count.prefix_tokens(client: 'Any', p: 'Prompt', model: 'str') -> 'int'
+count.prefix_tokens_async(client: 'Any', p: 'Prompt', model: 'str') -> 'int'
