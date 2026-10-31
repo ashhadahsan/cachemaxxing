@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 import time
 from typing import Any
 
@@ -13,6 +15,8 @@ from .prompt import Prompt
 _LIVE: dict[str, tuple[str, float]] = {}  # ponytail: per-process memo; other processes match on display_name
 _MARGIN = 30.0  # seconds a cache must still live to be reused
 _TOKENS: dict[str, int] = {}  # exact prefix counts, by model + prefix hash
+_LOCK = threading.Lock()  # ponytail: one lock for every key; per-key locks if many prefixes are created at once
+_ALOCKS: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Lock]] = {}
 
 
 def _plan(p: Prompt, model: str, reuses: int, interval_s: float, tokens: int) -> tuple[str, dict[str, Any]] | None:
@@ -53,6 +57,15 @@ def _remember(key: str, c: Any) -> str:
     return str(c.name)
 
 
+def _alock(key: str) -> asyncio.Lock:
+    """An asyncio.Lock per cache key for the running loop (a Lock can't be shared between loops)."""
+    loop = asyncio.get_running_loop()
+    held = _ALOCKS.get(key)
+    if held is None or held[0] is not loop:
+        held = _ALOCKS[key] = (loop, asyncio.Lock())
+    return held[1]
+
+
 def _memo(key: str) -> str | None:
     hit = _LIVE.get(key)
     return hit[0] if hit and hit[1] - time.time() > _MARGIN else None
@@ -79,10 +92,13 @@ def gemini_cache(
     key, config = plan
     if name := _memo(key):
         return name
-    for c in client.caches.list():
-        if _alive(c, key):
-            return _remember(key, c)
-    return _remember(key, client.caches.create(model=model, config=config))
+    with _LOCK:  # concurrent callers would each create, and pay storage for, their own cache
+        if name := _memo(key):
+            return name
+        for c in client.caches.list():
+            if _alive(c, key):
+                return _remember(key, c)
+        return _remember(key, client.caches.create(model=model, config=config))
 
 
 async def gemini_cache_async(
@@ -104,7 +120,10 @@ async def gemini_cache_async(
     key, config = plan
     if name := _memo(key):
         return name
-    async for c in await client.aio.caches.list():
-        if _alive(c, key):
-            return _remember(key, c)
-    return _remember(key, await client.aio.caches.create(model=model, config=config))
+    async with _alock(key):
+        if name := _memo(key):
+            return name
+        async for c in await client.aio.caches.list():
+            if _alive(c, key):
+                return _remember(key, c)
+        return _remember(key, await client.aio.caches.create(model=model, config=config))
