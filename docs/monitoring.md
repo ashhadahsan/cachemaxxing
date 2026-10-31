@@ -22,7 +22,9 @@ This writes one self-contained HTML page next to the usual table. Open it in any
 
 [See a demo built from a real log of 20 calls](demo.html). One of its call sites has the classic bug: the current time at the top of the system prompt.
 
-The page makes no network requests; the data is embedded and drawn by inline JavaScript. It does contain short snippets of your prompts around each divergence, so share it as you would share the log. `--html` doesn't change the exit code: the gate still fails below `--min-hit-rate`. That makes the page a good CI artifact:
+The page makes no network requests. The data is embedded and drawn by inline JavaScript, and a Content-Security-Policy in the page makes the browser block any request too. It does contain short snippets of your prompts around each divergence, so share it as you would share the log. With a log written using `record(..., redact=)`, the snippets show your redacted text instead.
+
+The page stays small for any log size. For each call site, the chart draws the most recent 5,000 calls and says so when there are more. The totals and the table always count every call. A log of 7,000 calls gives a page of about 180 KB. `--html` doesn't change the exit code: the gate still fails below `--min-hit-rate`. That makes the page a good CI artifact:
 
 ```yaml
 - run: cachemaxxing report calls.jsonl --min-hit-rate 0.6 --html report.html

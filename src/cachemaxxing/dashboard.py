@@ -43,6 +43,7 @@ def data(
 ) -> dict[str, Any]:
     """Everything the page shows, as JSON-ready data."""
     sites = sorted(stats.totals)
+    shown = Counter(s for s, _, _ in calls)
     index = {s: i for i, s in enumerate(sites)}
     try:
         v = version("cachemaxxing")
@@ -57,6 +58,7 @@ def data(
             {
                 "name": s,
                 "calls": stats.calls[s],
+                "shown": shown[s],  # calls drawn in the chart
                 **_numbers(stats.totals[s]),
                 "drift": [
                     {"label": k, "count": n, "example": _example(examples.get((s, k)))}
@@ -66,7 +68,6 @@ def data(
             }
             for s in sites
         ],
-        # ponytail: every call is embedded (~60 bytes each); sample or aggregate if logs reach ~10^5 calls
         "calls": [
             [index[s], round(u.hit_rate, 4), u.input, u.cache_read, u.cache_write, u.output, note, u.miss_reason]
             for s, u, note in calls

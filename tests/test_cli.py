@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from cachemaxxing import dashboard
+from cachemaxxing import cli, dashboard
 from cachemaxxing.cli import main
 from cachemaxxing.usage import record
 
@@ -97,6 +97,7 @@ def test_report_html_dashboard_is_self_contained(tmp_path: Path, capsys: pytest.
     html = out.read_text()
     assert "<script>alert(1)" not in html  # prompt text can't break out of the data block
     assert not re.search(r'(src|href)="https?:|@import|url\(\s*["\']?https?:', html)  # no network requests
+    assert "Content-Security-Policy" in html and "default-src 'none'" in html  # the browser enforces it too
     data = embedded(html)
     assert data["source"] == "calls.jsonl" and data["min_hit_rate"] == 0.5
     chat, faq = data["sites"]
@@ -141,3 +142,18 @@ def test_report_on_a_redacted_log_matches_the_plain_one(tmp_path: Path, capsys: 
     got = capsys.readouterr().out
     assert "2026-10-30" not in redacted.read_text()
     assert got == expected.replace("(timestamp)", "(?)")  # same numbers and drifting field, no characters to hint from
+
+
+def test_dashboard_draws_only_the_last_calls_of_each_site(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "CHART_CALLS", 50)
+    lines = [record("busy", {"model": "m", "system": "x"}, anthropic_resp(900)) for _ in range(60)]
+    lines += [record("quiet", {"model": "m", "system": "y"}, anthropic_resp(900)) for _ in range(3)]
+    log, page = tmp_path / "log.jsonl", tmp_path / "report.html"
+    log.write_text("\n".join(json.dumps(x) for x in lines))
+    assert main(["report", str(log), "--html", str(page)]) == 0
+    data = embedded(page.read_text())
+    busy, quiet = data["sites"]
+    assert (busy["calls"], busy["shown"], quiet["calls"], quiet["shown"]) == (60, 50, 3, 3)
+    assert len(data["calls"]) == 53 and busy["input"] == 60 * 1000  # totals still count every call
