@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -182,21 +183,23 @@ _HEADER = (
 
 
 class Stats:
-    """Usage totals per call site, in memory."""
+    """Usage totals per call site, in memory. Safe to share between threads."""
 
     def __init__(self) -> None:
         self.calls: dict[str, int] = {}
         self.totals: dict[str, Usage] = {}
         self.misses: dict[str, dict[str, int]] = {}  # provider-reported miss reasons per call site
+        self._lock = threading.Lock()
 
     def add(self, call_site: str, u: Usage) -> None:
-        self.calls[call_site] = self.calls.get(call_site, 0) + 1
-        self.totals[call_site] = (
-            self.totals[call_site] + u if call_site in self.totals else replace(u, miss_reason=None)
-        )
-        if u.miss_reason:
-            counts = self.misses.setdefault(call_site, {})
-            counts[u.miss_reason] = counts.get(u.miss_reason, 0) + 1
+        with self._lock:
+            self.calls[call_site] = self.calls.get(call_site, 0) + 1
+            self.totals[call_site] = (
+                self.totals[call_site] + u if call_site in self.totals else replace(u, miss_reason=None)
+            )
+            if u.miss_reason:
+                counts = self.misses.setdefault(call_site, {})
+                counts[u.miss_reason] = counts.get(u.miss_reason, 0) + 1
 
     def _note(self, site: str, note: str) -> str:
         provider = _top(self.misses[site]) if self.misses.get(site) else ""
@@ -204,13 +207,15 @@ class Stats:
 
     def table(self, notes: dict[str, str] | None = None) -> str:
         rows = [list(_HEADER)]
-        for site, u in sorted(self.totals.items()):
+        with self._lock:
+            totals, calls = sorted(self.totals.items()), dict(self.calls)
+        for site, u in totals:
             cost = "n/a" if u.est_cost is None else f"{u.est_cost:.4f}"
             saved = "n/a" if u.saved is None else f"{u.saved:.4f}"
             rows.append(
                 [
                     site,
-                    str(self.calls[site]),
+                    str(calls[site]),
                     f"{u.hit_rate:.1%}",
                     f"{u.input:,}",
                     f"{u.cache_read:,}",

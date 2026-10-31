@@ -1,4 +1,6 @@
 import json
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -319,3 +321,22 @@ def test_usage_raises_only_value_error(d: dict[str, Any]) -> None:
         usage(d)
     except ValueError:
         pass
+
+
+def test_stats_is_thread_safe() -> None:
+    old = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads constantly so a race shows up
+    try:
+        s = Stats()
+        u = Usage("anthropic", "m", input=10, cache_read=5, est_cost=0.001, saved=0.0005)
+
+        def work() -> None:
+            for _ in range(2000):
+                s.add("s", u)
+
+        with ThreadPoolExecutor(8) as pool:
+            for f in [pool.submit(work) for _ in range(8)]:
+                f.result()
+    finally:
+        sys.setswitchinterval(old)
+    assert s.calls == {"s": 16_000} and s.totals["s"].input == 160_000 and s.totals["s"].cache_read == 80_000
