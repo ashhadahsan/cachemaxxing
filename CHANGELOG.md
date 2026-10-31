@@ -4,6 +4,22 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+This is the release candidate for 1.0. The public API is now frozen.
+
+### Added
+
+- A "Running in production" guide covering rollout, what happens when something fails, logs, concurrency, costs and the stability policy.
+- The public API is listed in `design/api.md`, and `tests/api.txt` freezes every public name and signature. From 1.0, renames and removals go through a deprecation first.
+- `SECURITY.md` with private vulnerability reporting, `CONTRIBUTING.md`, and issue templates for bugs and wrong prices.
+
+### Changed
+
+- The development status is now Beta.
+
+### Fixed
+
+- `gemini_cache` and `gemini_cache_async` no longer make your call fail when the Gemini caches API fails. They return `None`, so the call uses implicit caching, and log a warning on the `cachemaxxing` logger.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added
