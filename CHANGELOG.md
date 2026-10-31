@@ -4,6 +4,18 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- Automatic diagnosis: `stats.add(call_site, usage(resp), request=kw)`. `Stats` compares each request with the previous one from the same call site. The first time something breaks the cached prefix, it logs a warning on the `cachemaxxing` logger with where the requests diverge, the text before and after, and how to fix it. It then counts each cause in `stats.drift`, and `stats.table()` shows the top cause per call site. `Stats(warn=False)` keeps the diagnosis without the warnings. `add()` returns the `Divergence` when a call broke the prefix. `CacheMiddleware` and `CachedModel` diagnose automatically.
+- `Divergence.fix`: what to change for each kind of divergence. Log warnings, `cachemaxxing report`, `cachemaxxing diff` and the dashboard all show the same advice.
+- A tutorial that takes a support bot with a timestamp at the top of its prompt from 0% to 98% cached input, with real output, plus `examples/tutorial.py`.
+
+### Changed
+
+- `cachemaxxing report` prints, under its table, the most frequent cause for each call site that missed, with the first example and the fix.
+- `cachemaxxing diff` adds a `fix:` line.
+- The "prefix matched but nothing was read" drift is now labelled `prefix ok, no cache read`. The explanation moved to the diagnosis below the table.
+
 ## [0.9.0] - 2026-10-31
 
 This is the release candidate for 1.0. The public API is now frozen.
