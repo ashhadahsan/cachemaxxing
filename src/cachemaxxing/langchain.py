@@ -96,6 +96,7 @@ def _record_call(
     tools: Sequence[Any],
     messages: Sequence[BaseMessage],
     result: Any,
+    redact: Callable[[str], str] | None = None,
 ) -> None:
     try:
         ai = _ai(result)
@@ -111,7 +112,7 @@ def _record_call(
                 "system": jsonable(system.content) if system else "",
                 "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in messages],
             }
-            on_record(record(call_site, sent, ai))
+            on_record(record(call_site, sent, ai, redact=redact))
     except Exception:  # the call succeeded and was billed: measuring it must never make it fail
         _log.warning("could not measure a %r model call", call_site, exc_info=True)
 
@@ -158,13 +159,15 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         *,
         ttl: str | None = None,
         on_record: Callable[[dict[str, Any]], None] | None = None,
+        redact: Callable[[str], str] | None = None,
     ) -> None:
         """`call_site`: your name for this agent in Stats, logs and traces (any string, see `Prompt`).
         `ttl`: "5m"/"1h" for Anthropic, "30m"/"12h" for OpenAI (defaults: 5m, 30m).
-        `on_record`: called with a `record()` dict per model call, e.g. to append it to a JSONL log."""
+        `on_record`: called with a `record()` dict per model call, e.g. to append it to a JSONL log.
+        `redact`: passed to `record()`, so the `on_record` lines hold no prompt or output text."""
         _check_init_ttl(ttl)
         super().__init__()
-        self.call_site, self.ttl, self.on_record = call_site, ttl, on_record
+        self.call_site, self.ttl, self.on_record, self.redact = call_site, ttl, on_record, redact
         self.stats = Stats()
 
     def _prepare(self, request: ModelRequest[Any]) -> ModelRequest[Any]:
@@ -193,6 +196,7 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
             tools,
             request.messages,
             result,
+            self.redact,
         )
 
     def wrap_model_call(
@@ -220,7 +224,8 @@ class CachedModel(Runnable[Any, BaseMessage]):
         ai = llm.invoke(state["messages"])     # in a node; llm.stats has hit rate and $ per call site
 
     A leading SystemMessage in the input is used as is (and marked); otherwise `system` is prepended.
-    `call_site` is your name for this model call in Stats, logs and traces (any string, see `Prompt`)."""
+    `call_site` is your name for this model call in Stats, logs and traces (any string, see `Prompt`).
+    `on_record` and `redact` work as in CacheMiddleware."""
 
     def __init__(
         self,
@@ -230,8 +235,9 @@ class CachedModel(Runnable[Any, BaseMessage]):
         call_site: str = "graph",
         ttl: str | None = None,
         on_record: Callable[[dict[str, Any]], None] | None = None,
+        redact: Callable[[str], str] | None = None,
     ) -> None:
-        self.model, self.call_site, self.ttl, self.on_record = model, call_site, ttl, on_record
+        self.model, self.call_site, self.ttl, self.on_record, self.redact = model, call_site, ttl, on_record, redact
         self.system = SystemMessage(content=system) if isinstance(system, str) else system
         self.stats = Stats()
         self._tools = _bound_tools(model)
@@ -254,13 +260,17 @@ class CachedModel(Runnable[Any, BaseMessage]):
     def invoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> BaseMessage:
         messages = self._messages(input)
         result = self._bound.invoke(messages, config, **kwargs)
-        _record_call(self.stats, self.call_site, self.on_record, self.model, None, self._tools, messages, result)
+        _record_call(
+            self.stats, self.call_site, self.on_record, self.model, None, self._tools, messages, result, self.redact
+        )
         return result  # type: ignore[no-any-return]
 
     async def ainvoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> BaseMessage:
         messages = self._messages(input)
         result = await self._bound.ainvoke(messages, config, **kwargs)
-        _record_call(self.stats, self.call_site, self.on_record, self.model, None, self._tools, messages, result)
+        _record_call(
+            self.stats, self.call_site, self.on_record, self.model, None, self._tools, messages, result, self.redact
+        )
         return result  # type: ignore[no-any-return]
 
 

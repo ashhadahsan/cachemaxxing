@@ -21,6 +21,29 @@ The library never writes files itself; `record()` just builds a JSON-serializabl
 
     The report groups calls by call site, and it finds drift by comparing consecutive requests from the same call site. Two different prompts under one name look like drift, and per-user names leave nothing to compare.
 
+### Logs without prompt text
+
+A plain `record()` line holds the whole request and response, so it holds your users' text too. If that text mustn't be stored, pass `redact=`, a function that every string in the request goes through:
+
+```python
+import hashlib
+
+def hashed(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+log.write(json.dumps(record("support.answer", kwargs, resp, redact=hashed)) + "\n")
+```
+
+With `redact=`:
+
+- Every string in the request goes through your function, except model names, message roles, block types and tool names. `diff` needs those to line requests up.
+- The response is reduced to its token counts and cost. The model's output is never stored.
+- `report` gives the same hit rates, costs and drifting fields as on a plain log.
+
+What your function keeps decides how much `diff` can say. With hashing, it still finds the field that changed, such as `system[0].text`, and structural causes such as tool order or a removed turn, but not the characters, so there is no `timestamp` or `uuid` hint. A function that only scrubs personal data, such as replacing email addresses with a regex, keeps the full character-level diff.
+
+`CacheMiddleware` and `CachedModel` take the same `redact=` for their `on_record` lines.
+
 ## 2. Find the call sites that miss
 
 Illustrative output (made-up numbers):
