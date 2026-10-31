@@ -229,8 +229,7 @@ class Stats:
             return None
         div = diff(previous, current)
         if div is not None and div.hint != "last turn":
-            path = re.sub(r"\[\d+\]", "[]", div.path)  # group growing conversations together
-            note, why = f"{path} ({div.hint or '?'})", f"the cached prefix broke: {div}"
+            note, why = _label(div), f"the cached prefix broke: {div}"
         elif u.cache_read == 0:
             note, why, div = NO_READ, f"{NO_READ}. {NO_READ_WHY}", None
         else:
@@ -274,6 +273,12 @@ class Stats:
             )
         widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
         return "\n".join("  ".join(c.ljust(w) for c, w in zip(r, widths, strict=True)).rstrip() for r in rows)
+
+
+def _label(div: Divergence) -> str:
+    """A drift's name in reports: its path without list indexes, so a growing conversation groups together."""
+    path = re.sub(r"\[\d+\]", "[]", div.path)
+    return f"{path} ({div.hint or '?'})"
 
 
 def _top(counts: dict[str, int]) -> str:

@@ -4,19 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-from collections import Counter, deque
+from collections import deque
 from collections.abc import Iterator
 from itertools import chain
 from pathlib import Path
 from typing import Any
 
 from . import dashboard
-from .diff import Divergence, diff
-from .usage import Stats, Usage, usage
+from .diff import NO_READ, NO_READ_WHY, diff
+from .usage import Stats, Usage, _label, usage
 
-NO_READ = "prefix ok, no cache read (TTL expired, below minimum, or routing)"
 CHART_CALLS = 5000  # calls per call site drawn in the dashboard; keeps the page small for any log size
 
 
@@ -48,33 +46,24 @@ def _records(log: str, strict: bool) -> Iterator[tuple[str, dict[str, Any], Usag
 
 
 def _report(log: str, min_hit_rate: float | None, html: str | None = None, strict: bool = False) -> int:
-    stats = Stats()
-    last: dict[str, Any] = {}
-    drift: dict[str, Counter[str]] = {}
-    examples: dict[tuple[str, str], Divergence] = {}
+    stats = Stats(warn=False)  # the diagnosis is printed below the table instead
     recent: dict[str, deque[tuple[int, str, Usage, str]]] = {}
     for i, (site, request, u) in enumerate(_records(log, strict)):
-        stats.add(site, u)
-        note = ""
-        if site in last:
-            div = diff(last[site], request)
-            if (div is None or div.hint == "last turn") and u.cache_read == 0:
-                note = NO_READ
-            elif div is not None and div.hint != "last turn":
-                path = re.sub(r"\[\d+\]", "[]", div.path)  # group growing conversations together
-                note = f"{path} ({div.hint or '?'})"
-                examples.setdefault((site, note), div)
-            if note:
-                drift.setdefault(site, Counter())[note] += 1
+        div = stats.add(site, u, request=request)
+        follow_up_miss = stats.calls[site] > 1 and u.cache_read == 0
+        note = _label(div) if div else NO_READ if follow_up_miss else ""
         recent.setdefault(site, deque(maxlen=CHART_CALLS)).append((i, site, u, note))
-        last[site] = request
     if not stats.totals:
         raise ValueError(f"no records in {log}")
-    notes = {site: f"{key} x{n}" for site, c in drift.items() for key, n in c.most_common(1)}
-    print(stats.table(notes))
+    print(stats.table())
+    for site, causes in sorted(stats.drift.items()):
+        cause, n = causes.most_common(1)[0]
+        example = stats._examples.get((site, cause))
+        print(f"\n{site}: {cause} on {n} of {stats.calls[site] - 1} follow-up calls")
+        print(f"  {example}" if example else f"  {NO_READ_WHY}")
     if html:
         calls = [(site, u, note) for _, site, u, note in sorted(chain(*recent.values()), key=lambda c: c[0])]
-        page = dashboard.data(Path(log).name, stats, drift, examples, calls, min_hit_rate)
+        page = dashboard.data(Path(log).name, stats, calls, min_hit_rate)
         Path(html).write_text(dashboard.render(page), encoding="utf-8")
         print(f"wrote {html}", file=sys.stderr)
     low = sorted(s for s, u in stats.totals.items() if min_hit_rate is not None and u.hit_rate < min_hit_rate)

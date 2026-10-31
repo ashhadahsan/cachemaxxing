@@ -13,8 +13,11 @@ from importlib.resources import files
 from typing import Any
 
 from . import facts
-from .diff import Divergence
+from .diff import FIXES, GENERIC_FIX, NO_READ, NO_READ_WHY, Divergence
 from .usage import Stats, Usage
+
+# the fix advice, from diff.FIXES so the page, the report and the warnings all say the same thing
+_FIXES = json.dumps({"fixes": FIXES, "generic": GENERIC_FIX, "noRead": NO_READ, "noReadWhy": NO_READ_WHY})
 
 
 def _numbers(u: Usage) -> dict[str, Any]:
@@ -36,8 +39,6 @@ def _example(d: Divergence | None) -> dict[str, Any] | None:
 def data(
     source: str,
     stats: Stats,
-    drift: dict[str, Counter[str]],
-    examples: dict[tuple[str, str], Divergence],
     calls: list[tuple[str, Usage, str]],
     min_hit_rate: float | None,
 ) -> dict[str, Any]:
@@ -61,8 +62,8 @@ def data(
                 "shown": shown[s],  # calls drawn in the chart
                 **_numbers(stats.totals[s]),
                 "drift": [
-                    {"label": k, "count": n, "example": _example(examples.get((s, k)))}
-                    for k, n in drift.get(s, Counter()).most_common(5)
+                    {"label": k, "count": n, "example": _example(stats._examples.get((s, k)))}
+                    for k, n in stats.drift.get(s, Counter()).most_common(5)
                 ],
                 "misses": sorted(stats.misses.get(s, {}).items(), key=lambda kv: -kv[1]),
             }
@@ -79,4 +80,4 @@ def render(page: dict[str, Any]) -> str:
     """The dashboard HTML for `data(...)`."""
     template = (files("cachemaxxing") / "dashboard.html").read_text(encoding="utf-8")
     blob = json.dumps(page, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")  # no </script>
-    return template.replace("{{DATA}}", blob, 1)
+    return template.replace("{{FIXES}}", _FIXES, 1).replace("{{DATA}}", blob, 1)  # FIXES first: DATA is user text

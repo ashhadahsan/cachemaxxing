@@ -141,7 +141,8 @@ def test_report_on_a_redacted_log_matches_the_plain_one(tmp_path: Path, capsys: 
     assert main(["report", str(redacted)]) == 0
     got = capsys.readouterr().out
     assert "2026-10-30" not in redacted.read_text()
-    assert got == expected.replace("(timestamp)", "(?)")  # same numbers and drifting field, no characters to hint from
+    table = expected.split("\n\n")[0].replace("(timestamp)", "(?)")  # same numbers and drifting field, no characters
+    assert got.split("\n\n")[0] == table and "chat: system[].text (?) on 2 of 2 follow-up calls" in got
 
 
 def test_dashboard_draws_only_the_last_calls_of_each_site(
@@ -157,3 +158,16 @@ def test_dashboard_draws_only_the_last_calls_of_each_site(
     busy, quiet = data["sites"]
     assert (busy["calls"], busy["shown"], quiet["calls"], quiet["shown"]) == (60, 50, 3, 3)
     assert len(data["calls"]) == 53 and busy["input"] == 60 * 1000  # totals still count every call
+
+
+def test_report_prints_the_diagnosis_under_the_table(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    lines = [
+        record("chat", {"model": "m", "system": f"Now: 2026-10-30T10:0{i}:00Z"}, anthropic_resp(0)) for i in range(3)
+    ]
+    log = tmp_path / "log.jsonl"
+    log.write_text("\n".join(json.dumps(x) for x in lines))
+    assert main(["report", str(log)]) == 0
+    out, err = capsys.readouterr()
+    assert "chat: system[].text (timestamp) on 2 of 2 follow-up calls" in out
+    assert "  a: 'Now: 2026-10-30T10:00:00Z'" in out and "fix: A time changes on every call" in out
+    assert err == ""  # the CLI prints its own diagnosis; no logging warnings on stderr
