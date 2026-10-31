@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
 ### Added
 
 - `record(..., redact=fn)` writes a log line without prompt or output text. Every string in the request goes through `fn`, except model names, roles, block types and tool names. The response is reduced to its token counts and cost. `report` gives the same hit rates, costs and drifting fields as on a plain log. `CacheMiddleware` and `CachedModel` take the same `redact=` for their `on_record` lines.
@@ -90,7 +92,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
 
-[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.2.0...v0.3.0
