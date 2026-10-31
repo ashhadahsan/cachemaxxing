@@ -19,3 +19,4 @@ wheels/
 site/
 canary.jsonl
 canary.html
+.coverage

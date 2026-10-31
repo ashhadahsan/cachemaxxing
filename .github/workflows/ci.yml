@@ -20,9 +20,26 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
-      - run: uv run pytest
+      - run: uv run coverage run -m pytest
+      - run: uv run coverage report --fail-under=95
       - name: no requests anywhere
         run: "! grep -rnE '^\\s*(import|from) requests' src tests benchmarks examples 2>/dev/null"
+  lowest:
+    name: oldest supported SDKs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: "3.11"
+      - name: tests against the lowest versions the extras allow
+        run: >-
+          uv run --isolated --no-project --resolution lowest-direct --with .
+          --with "anthropic>=2.3" --with "openai>=3.41" --with "google-genai>=2.34" --with "langchain>=1.4.7"
+          --with "langchain-openai>=1.7.3" --with "langchain-anthropic>=1.7.7" --with "langchain-google-genai>=4.4.2"
+          --with "pytest>=9.2" --with "httpx>=0.28" --with "hypothesis>=6.170.14"
+          pytest
   docs:
     runs-on: ubuntu-latest
     steps:

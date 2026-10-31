@@ -54,6 +54,7 @@ dev = [
     "langchain-anthropic>=1.7.7",
     "langchain-google-genai>=4.4.2",
     "hypothesis>=6.170.14",
+    "coverage>=7.17.0",
 ]
 docs = [
     "mkdocstrings-python>=2.0.10",
@@ -78,3 +79,6 @@ files = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["cachemaxxing"]
