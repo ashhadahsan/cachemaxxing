@@ -20,6 +20,7 @@ never imports LangChain."""
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
@@ -27,11 +28,14 @@ from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResp
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, convert_to_messages
 from langchain_core.runnables import Runnable, RunnableConfig
 
+from . import facts
 from .canon import canonical_json, jsonable
 from .prompt import _cc, _check_ttl, openai_explicit
 from .usage import Stats, record, usage
 
 _KEEP = ("type", "content", "tool_calls", "tool_call_id", "name")  # what a provider sees; LangChain ids are not
+_TTLS = {t for p in facts.PROVIDERS.values() for t in p.ttls}
+_log = logging.getLogger("cachemaxxing")
 
 
 def _provider(model: Any) -> tuple[str, str]:
@@ -93,20 +97,28 @@ def _record_call(
     messages: Sequence[BaseMessage],
     result: Any,
 ) -> None:
-    ai = _ai(result)
-    if ai is None or not ai.usage_metadata:
-        return
-    u = usage(ai)
-    stats.add(call_site, u)
-    ai.response_metadata["cachemaxxing"] = u.attributes(call_site, prefix="")  # travels with the message into traces
-    if on_record:
-        sent = {
-            "model": _provider(model)[1],
-            "tools": [_tool_name(t) for t in tools],
-            "system": jsonable(system.content) if system else "",
-            "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in messages],
-        }
-        on_record(record(call_site, sent, ai))
+    try:
+        ai = _ai(result)
+        if ai is None or not ai.usage_metadata:
+            return
+        u = usage(ai)
+        stats.add(call_site, u)
+        ai.response_metadata["cachemaxxing"] = u.attributes(call_site, prefix="")  # travels with it into traces
+        if on_record:
+            sent = {
+                "model": _provider(model)[1],
+                "tools": [_tool_name(t) for t in tools],
+                "system": jsonable(system.content) if system else "",
+                "messages": [{k: v for k, v in jsonable(m).items() if k in _KEEP} for m in messages],
+            }
+            on_record(record(call_site, sent, ai))
+    except Exception:  # the call succeeded and was billed: measuring it must never make it fail
+        _log.warning("could not measure a %r model call", call_site, exc_info=True)
+
+
+def _check_init_ttl(ttl: str | None) -> None:
+    if ttl is not None and ttl not in _TTLS:
+        raise ValueError(f"cache TTL must be one of {sorted(_TTLS)}, not {ttl!r}")
 
 
 def cache_fields(
@@ -150,15 +162,22 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         """`call_site`: your name for this agent in Stats, logs and traces (any string, see `Prompt`).
         `ttl`: "5m"/"1h" for Anthropic, "30m"/"12h" for OpenAI (defaults: 5m, 30m).
         `on_record`: called with a `record()` dict per model call, e.g. to append it to a JSONL log."""
+        _check_init_ttl(ttl)
         super().__init__()
         self.call_site, self.ttl, self.on_record = call_site, ttl, on_record
         self.stats = Stats()
 
     def _prepare(self, request: ModelRequest[Any]) -> ModelRequest[Any]:
         tools = request.tools or []
-        system, extra = cache_fields(
-            request.model, request.system_message, call_site=self.call_site, ttl=self.ttl, tools=tools
-        )
+        try:
+            system, extra = cache_fields(
+                request.model, request.system_message, call_site=self.call_site, ttl=self.ttl, tools=tools
+            )
+        except ValueError:  # configuration (e.g. a TTL this provider lacks): raise before anything is sent
+            raise
+        except Exception:  # markers are an optimization: send the request as it was
+            _log.warning("could not add cache fields to a %r model call", self.call_site, exc_info=True)
+            return request
         if system is request.system_message and not extra:
             return request
         return request.override(system_message=system, model_settings={**extra, **(request.model_settings or {})})
@@ -223,7 +242,13 @@ class CachedModel(Runnable[Any, BaseMessage]):
         raw = input.to_messages() if hasattr(input, "to_messages") else [input] if isinstance(input, str) else input
         msgs = convert_to_messages(raw)
         system, rest = (msgs[0], msgs[1:]) if msgs and isinstance(msgs[0], SystemMessage) else (self.system, msgs)
-        marked, _ = cache_fields(self.model, system, call_site=self.call_site, ttl=self.ttl, tools=self._tools)
+        try:
+            marked, _ = cache_fields(self.model, system, call_site=self.call_site, ttl=self.ttl, tools=self._tools)
+        except ValueError:
+            raise
+        except Exception:
+            _log.warning("could not add cache fields to a %r model call", self.call_site, exc_info=True)
+            marked = system
         return [marked, *rest] if marked is not None else list(rest)
 
     def invoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> BaseMessage:

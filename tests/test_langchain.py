@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage  # no
 from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
 from langchain_openai import ChatOpenAI  # noqa: E402
 
+import cachemaxxing.langchain as lc  # noqa: E402
 from cachemaxxing.langchain import CacheMiddleware, cache_fields  # noqa: E402
 
 BP = {"mode": "explicit"}
@@ -171,3 +172,48 @@ def test_metrics_are_attached_to_the_message_for_tracing() -> None:
     run(CacheMiddleware("agent"), request(ChatOpenAI(model="gpt-6-luna", api_key="t")), ai)
     meta = ai.response_metadata["cachemaxxing"]
     assert meta["call_site"] == "agent" and meta["hit_rate"] == 0.75 and meta["cache_read_tokens"] == 1500
+
+
+def boom(*args: Any, **kwargs: Any) -> Any:
+    raise RuntimeError("unexpected shape")
+
+
+def test_measuring_errors_never_fail_the_call(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(lc, "usage", boom)
+    mw = CacheMiddleware("agent")
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        run(mw, request(ChatOpenAI(model="gpt-6-luna", api_key="t")), reply("openai", "gpt-6-luna"))
+    assert mw.stats.calls == {} and "could not measure" in caplog.text
+
+
+def test_on_record_errors_never_fail_the_call(caplog: pytest.LogCaptureFixture) -> None:
+    def disk_full(line: dict[str, Any]) -> None:
+        raise OSError("disk full")
+
+    mw = CacheMiddleware("agent", on_record=disk_full)
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        run(mw, request(ChatOpenAI(model="gpt-6-luna", api_key="t")), reply("openai", "gpt-6-luna"))
+    assert mw.stats.calls == {"agent": 1} and "could not measure" in caplog.text
+
+
+def test_marking_errors_send_the_request_unchanged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(lc, "cache_fields", boom)
+    req = request(ChatOpenAI(model="gpt-6-luna", api_key="t"))
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        sent = run(CacheMiddleware("agent"), req, reply("openai", "gpt-6-luna"))
+    assert sent is req and "could not add cache fields" in caplog.text
+
+
+def test_bad_ttl_still_raises_before_sending() -> None:
+    with pytest.raises(ValueError):
+        CacheMiddleware("agent", ttl="2h")
+    with pytest.raises(ValueError):  # valid TTL, wrong provider: a configuration error, raised before the call
+        run(
+            CacheMiddleware("agent", ttl="1h"),
+            request(ChatOpenAI(model="gpt-6-luna", api_key="t")),
+            reply("openai", "gpt-6-luna"),
+        )
