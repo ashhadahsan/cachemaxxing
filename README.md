@@ -16,16 +16,24 @@ Anthropic, OpenAI and Gemini bill a repeated prompt prefix at a fraction of the 
 - **Fix.** `Prompt` orders your prompt from most to least stable and places each provider's cache markers for you.
 
 ```python
+from openai import OpenAI
 from cachemaxxing import Prompt, usage
 
-p = Prompt(call_site="support.answer")
-p.tools(TOOLS).system(SYSTEM).context(DOCS).history(messages).retrieved(chunks).user(question)
+chat = [
+    {"role": "system", "content": SYSTEM},  # your long, fixed instructions: cached
+    {"role": "user", "content": "How do I reset my router?"},
+]
+p = Prompt(call_site="support.answer").messages(chat)  # call_site: any name for this call, used in reports
 
-resp = client.messages.create(max_tokens=1024, **p.anthropic("claude-haiku-5-5"))
+resp = OpenAI().chat.completions.create(**p.openai_chat("gpt-6-luna"))
+# same p: anthropic.messages.create(max_tokens=1024, **p.anthropic("claude-haiku-5-5"))
+#         genai_client.models.generate_content(**p.gemini("gemini-3.8-flash"))
 
 u = usage(resp)
 print(f"{u.hit_rate:.0%} of input from cache, ~${u.est_cost or 0:.4f}")
 ```
+
+The system prompt and the conversation so far get the provider's cache markers, so each turn reads everything before the new question from cache. For tools, RAG chunks or a timestamp, build the prompt from parts: `p.tools(TOOLS).system(SYSTEM).history(chat).retrieved(chunks).user(question)`. The quickstart shows [where the markers go, and the exact request](https://ashhadahsan.github.io/cachemaxxing/quickstart/).
 
 ## Works with
 
@@ -36,7 +44,7 @@ print(f"{u.hit_rate:.0%} of input from cache, ~${u.est_cost or 0:.4f}")
 | **Gemini** | `client.models.generate_content(**p.gemini(model))`, with an explicit cache via `gemini_cache()` when `should_cache()` says it pays |
 | **LiteLLM** | `litellm.completion(**p.litellm("anthropic/claude-haiku-5-5"))` |
 | **LangChain agents** | `create_agent(..., middleware=[CacheMiddleware("support.agent")])` |
-| **LangGraph graphs, LCEL chains** | `llm = CachedModel(chat_model, system=SYSTEM)`, then `llm.invoke(state["messages"])` |
+| **LangChain messages, LangGraph graphs, LCEL** | `llm = CachedModel(chat_model)`, then `llm.invoke([SystemMessage(...), HumanMessage(...)])` |
 
 On OpenAI GPT-5.6+ it places explicit cache breakpoints. On Anthropic it places `cache_control` markers, at most 4. Gemini stays on implicit caching unless an explicit cache pays.
 
@@ -85,6 +93,8 @@ Setup: 8-turn conversations (agents: 3 questions with a tool call), 3 customers 
 
 ## Examples
 
+- [`examples/chat.py`](examples/chat.py): start here. A chat kept as a plain list of messages, cached on every turn, on any provider
+- [`examples/langchain_chat.py`](examples/langchain_chat.py): the same with LangChain `SystemMessage` / `HumanMessage` / `AIMessage`
 - [`examples/quickstart.py`](examples/quickstart.py): one prompt, every provider and LiteLLM
 - [`examples/rag_chat.py`](examples/rag_chat.py): a multi-turn RAG chat with per-turn retrieval, logging and a report
 - [`examples/langchain_agent.py`](examples/langchain_agent.py): a LangChain `create_agent` agent with `CacheMiddleware`

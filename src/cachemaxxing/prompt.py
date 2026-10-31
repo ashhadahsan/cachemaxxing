@@ -20,6 +20,24 @@ def _parts(x: Parts) -> list[str]:
     return [p if isinstance(p, str) else canonical_json(p) for p in items]
 
 
+def _texts(content: Any) -> list[str] | None:
+    """Text of a chat message's content (a string or a list of text parts); None if it holds anything else."""
+    if isinstance(content, str):
+        return [content]
+    if isinstance(content, list) and all(isinstance(b, dict) and "text" in b for b in content):
+        return [str(b["text"]) for b in content]
+    return None
+
+
+def _gemini_turn(msg: Any) -> Any:
+    """A {"role", "content"} text turn as Gemini content; Gemini-format and tool-call turns pass through."""
+    m = plain(msg)
+    texts = _texts(m.get("content")) if isinstance(m, dict) and "parts" not in m else None
+    if texts is None:
+        return msg
+    return {"role": "model" if m.get("role") == "assistant" else "user", "parts": [{"text": t} for t in texts]}
+
+
 def _sort_tool(t: Any) -> Any:
     t = plain(t)
     if isinstance(t, dict):
@@ -100,7 +118,13 @@ def _mark(msg: Any, key: str, marker: Json, text_type: str, only_text: bool) -> 
 
 class Prompt:
     """Collect segments in any order; render with an adapter. Output order is fixed:
-    tools, system, context, examples, history, retrieved, user."""
+    tools, system, context, examples, history, retrieved, user.
+
+    `call_site` is any name you choose for the place in your code that makes this call, such as
+    "support.answer" or "rag.answer". There is no fixed list. Use one per prompt template, not one per user
+    or per request. It groups usage per call site in `Stats`, `record()` and `cachemaxxing report`, and the
+    report finds drift by comparing consecutive requests of the same call site. It also names Gemini
+    explicit caches, and it is part of `prompt_cache_key` on OpenAI models before GPT-5.6."""
 
     def __init__(self, call_site: str = "default") -> None:
         self.call_site = call_site
@@ -132,8 +156,22 @@ class Prompt:
         self._examples = sorted(parts) if reorderable else parts
         return self
 
+    def messages(self, messages: Sequence[Any]) -> Self:
+        """Your whole chat as an OpenAI-style list of {"role": ..., "content": ...} dicts, for any provider.
+        Leading system/developer messages become the system prompt; the rest, latest user message included,
+        is the conversation. Same as .system(...).history(...)."""
+        msgs = list(messages)
+        n = 0
+        while n < len(msgs) and isinstance(m := plain(msgs[n]), dict) and m.get("role") in ("system", "developer"):
+            n += 1
+        system = [t for m in msgs[:n] for t in _texts(plain(m).get("content")) or []]
+        if system:
+            self.system(system)
+        return self.history(msgs[n:])
+
     def history(self, messages: Sequence[Any]) -> Self:
-        """Earlier turns in your provider's message format. Append-only; never modified."""
+        """Earlier turns, append-only, never modified: your provider's message format, or {"role", "content"}
+        text turns (converted for Gemini)."""
         self._history = list(messages)
         return self
 
@@ -262,7 +300,7 @@ class Prompt:
         """kwargs for google-genai `client.models.generate_content(**kwargs)`. Implicit caching unless
         cached_content (from gemini_cache) is given; then the cached fields are left out."""
         config: Json = {"cached_content": cached_content} if cached_content else self.gemini_prefix()
-        contents = list(self._history)
+        contents = [_gemini_turn(m) for m in self._history]
         final = [{"text": t} for t in self._retrieved + self._user]
         if final:
             contents.append({"role": "user", "parts": final})

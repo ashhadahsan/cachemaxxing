@@ -16,6 +16,11 @@ with open("calls.jsonl", "a") as log:
 
 The library never writes files itself; `record()` just builds a JSON-serializable line with the call site, the request and the response.
 
+!!! info "What is a call site?"
+    A call site is any name you choose for a place in your code that calls the model, such as `"support.answer"`, `"rag.answer"` or `"ticket.summarize"`. There is no fixed list. Give each prompt template its own name, and use the same name in `Prompt("support.answer")` and `record("support.answer", ...)`. Don't use one name per user or per request.
+
+    The report groups calls by call site, and it finds drift by comparing consecutive requests from the same call site. Two different prompts under one name look like drift, and per-user names leave nothing to compare.
+
 ## 2. Find the call sites that miss
 
 Illustrative output (made-up numbers):
