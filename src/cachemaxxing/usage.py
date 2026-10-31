@@ -18,6 +18,7 @@ class Usage:
     cache_write: int = 0
     output: int = 0  # includes thinking / reasoning tokens
     est_cost: float | None = None  # USD at list price as of facts.VERIFIED; None for unknown models
+    saved: float | None = None  # USD saved versus the same call with no caching (negative: writes cost more)
     miss_reason: str | None = None  # the provider's own verdict when diagnostics were requested
 
     @property
@@ -26,6 +27,7 @@ class Usage:
 
     def __add__(self, other: Usage) -> Usage:
         cost = None if self.est_cost is None or other.est_cost is None else self.est_cost + other.est_cost
+        saved = None if self.saved is None or other.saved is None else self.saved + other.saved
         return replace(
             self,
             input=self.input + other.input,
@@ -33,6 +35,7 @@ class Usage:
             cache_write=self.cache_write + other.cache_write,
             output=self.output + other.output,
             est_cost=cost,
+            saved=saved,
             miss_reason=None,
         )
 
@@ -122,7 +125,7 @@ def _langchain(d: dict[str, Any], lc: dict[str, Any], model: str | None) -> Usag
 
 def _priced(provider: str, model: str, total: int, read: int, write: int, out: int, long_write: int = 0) -> Usage:
     m = facts.find(model)
-    cost = None
+    cost = saved = None
     if m is not None:
         if m.long_context and total > m.long_context[0]:
             m = m.long_context[1]
@@ -135,10 +138,23 @@ def _priced(provider: str, model: str, total: int, read: int, write: int, out: i
             + long_write * writes[-1]
             + out * m.output
         ) / 1e6
-    return Usage(provider, model, total, read, write, out, cost)
+        # ponytail: Gemini explicit-cache storage is billed hourly, not per call, so it isn't in est_cost/saved
+        saved = (total * m.input + out * m.output) / 1e6 - cost
+    return Usage(provider, model, total, read, write, out, cost, saved)
 
 
-_HEADER = ("call site", "calls", "hit rate", "input", "cache read", "cache write", "output", "est $", "top drift")
+_HEADER = (
+    "call site",
+    "calls",
+    "hit rate",
+    "input",
+    "cache read",
+    "cache write",
+    "output",
+    "est $",
+    "saved $",
+    "top drift",
+)
 
 
 class Stats:
@@ -166,6 +182,7 @@ class Stats:
         rows = [list(_HEADER)]
         for site, u in sorted(self.totals.items()):
             cost = "n/a" if u.est_cost is None else f"{u.est_cost:.4f}"
+            saved = "n/a" if u.saved is None else f"{u.saved:.4f}"
             rows.append(
                 [
                     site,
@@ -176,6 +193,7 @@ class Stats:
                     f"{u.cache_write:,}",
                     f"{u.output:,}",
                     cost,
+                    saved,
                     self._note(site, (notes or {}).get(site, "")),
                 ]
             )

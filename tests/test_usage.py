@@ -240,3 +240,30 @@ def test_stats_counts_miss_reasons_per_call_site() -> None:
     s.add("a", Usage("anthropic", "m", input=10))
     assert s.misses == {"a": {"system_changed": 2}}
     assert "provider: system_changed x2" in s.table()
+
+
+def test_saved_is_the_uncached_price_minus_the_actual_one() -> None:
+    r = {
+        "type": "message",
+        "model": "claude-haiku-5-5",
+        "usage": {
+            "input_tokens": 100,
+            "cache_read_input_tokens": 9000,
+            "cache_creation_input_tokens": 1000,
+            "output_tokens": 50,
+        },
+    }
+    u = usage(r)
+    uncached = (10100 * 0.10 + 50 * 0.50) / 1e6
+    assert u.saved == pytest.approx(uncached - (u.est_cost or 0))
+    writes_only = {**r, "usage": {"input_tokens": 0, "cache_creation_input_tokens": 1000, "output_tokens": 0}}
+    assert usage(writes_only).saved == pytest.approx(-(1000 * 0.025) / 1e6)  # paid the 1.25x write premium
+    assert usage({"type": "message", "model": "x", "usage": {"input_tokens": 1}}).saved is None
+
+
+def test_stats_sums_saved_and_shows_it() -> None:
+    s = Stats()
+    s.add("a", Usage("anthropic", "m", input=100, cache_read=90, est_cost=0.1, saved=0.4))
+    s.add("a", Usage("anthropic", "m", input=100, cache_read=90, est_cost=0.1, saved=0.4))
+    assert s.totals["a"].saved == pytest.approx(0.8)
+    assert "saved $" in s.table() and "0.8000" in s.table()
