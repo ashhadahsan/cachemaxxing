@@ -4,6 +4,20 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- `record(..., redact=fn)` writes a log line without prompt or output text. Every string in the request goes through `fn`, except model names, roles, block types and tool names. The response is reduced to its token counts and cost. `report` gives the same hit rates, costs and drifting fields as on a plain log. `CacheMiddleware` and `CachedModel` take the same `redact=` for their `on_record` lines.
+
+### Changed
+
+- The `report --html` dashboard draws at most the last 5,000 calls of each call site, and says so when there are more, so the page stays small for any log size. The totals and the table still count every call.
+- The dashboard page has a Content-Security-Policy, so the browser itself blocks any network request.
+
+### Fixed
+
+- `Stats` is safe to share between threads. Before, concurrent `add()` calls could lose counts.
+- Concurrent `gemini_cache` and `gemini_cache_async` calls for the same prefix now create one explicit cache. Before, each caller could create its own, and each was billed for storage.
+
 ## [0.4.1] - 2026-10-31
 
 ### Fixed
