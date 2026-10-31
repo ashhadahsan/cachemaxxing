@@ -164,3 +164,10 @@ def test_cached_model_through_langchain_and_the_openai_sdk() -> None:
     second = seen[1].get("messages", seen[1].get("input"))
     assert [m["role"] for m in second][:2] in (["system", "user"], ["developer", "user"])
     assert second[0]["content"][-1]["text"] == "Own system prompt."
+
+
+def test_metrics_are_attached_to_the_message_for_tracing() -> None:
+    ai = reply("openai", "gpt-6-luna")
+    run(CacheMiddleware("agent"), request(ChatOpenAI(model="gpt-6-luna", api_key="t")), ai)
+    meta = ai.response_metadata["cachemaxxing"]
+    assert meta["call_site"] == "agent" and meta["hit_rate"] == 0.75 and meta["cache_read_tokens"] == 1500
