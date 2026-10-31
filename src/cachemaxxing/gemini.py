@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from typing import Any
@@ -14,6 +15,7 @@ from .prompt import Prompt
 
 _LIVE: dict[str, tuple[str, float]] = {}  # ponytail: per-process memo; other processes match on display_name
 _MARGIN = 30.0  # seconds a cache must still live to be reused
+_log = logging.getLogger("cachemaxxing")
 _TOKENS: dict[str, int] = {}  # exact prefix counts, by model + prefix hash
 _LOCK = threading.Lock()  # ponytail: one lock for every key; per-key locks if many prefixes are created at once
 _ALOCKS: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Lock]] = {}
@@ -81,7 +83,8 @@ def gemini_cache(
     prefix_tokens: int | None = None,
 ) -> str | None:
     """Name of a live explicit cache holding p's static prefix, created only if should_cache() says it pays.
-    Use it as p.gemini(model, cached_content=name). None means stay on implicit caching.
+    Use it as p.gemini(model, cached_content=name). None means stay on implicit caching, which is also what
+    happens, with a warning on the `cachemaxxing` logger, when the caches API fails.
     The prefix is counted exactly with client.models.count_tokens (once per prefix) unless prefix_tokens is given."""
     if any(callable(t) for t in p._tools):  # python-function tools can't live in an explicit cache
         return None
@@ -92,13 +95,17 @@ def gemini_cache(
     key, config = plan
     if name := _memo(key):
         return name
-    with _LOCK:  # concurrent callers would each create, and pay storage for, their own cache
-        if name := _memo(key):
-            return name
-        for c in client.caches.list():
-            if _alive(c, key):
-                return _remember(key, c)
-        return _remember(key, client.caches.create(model=model, config=config))
+    try:
+        with _LOCK:  # concurrent callers would each create, and pay storage for, their own cache
+            if name := _memo(key):
+                return name
+            for c in client.caches.list():
+                if _alive(c, key):
+                    return _remember(key, c)
+            return _remember(key, client.caches.create(model=model, config=config))
+    except Exception:  # an explicit cache is an optimization: the call still works on implicit caching
+        _log.warning("could not get a Gemini explicit cache for %r; using implicit caching", p.call_site, exc_info=True)
+        return None
 
 
 async def gemini_cache_async(
@@ -120,10 +127,14 @@ async def gemini_cache_async(
     key, config = plan
     if name := _memo(key):
         return name
-    async with _alock(key):
-        if name := _memo(key):
-            return name
-        async for c in await client.aio.caches.list():
-            if _alive(c, key):
-                return _remember(key, c)
-        return _remember(key, await client.aio.caches.create(model=model, config=config))
+    try:
+        async with _alock(key):
+            if name := _memo(key):
+                return name
+            async for c in await client.aio.caches.list():
+                if _alive(c, key):
+                    return _remember(key, c)
+            return _remember(key, await client.aio.caches.create(model=model, config=config))
+    except Exception:
+        _log.warning("could not get a Gemini explicit cache for %r; using implicit caching", p.call_site, exc_info=True)
+        return None

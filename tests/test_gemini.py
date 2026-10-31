@@ -148,3 +148,22 @@ def test_concurrent_async_callers_create_one_cache() -> None:
 
     names = asyncio.run(many())
     assert len(caches.created) == 1 and set(names) == {"cachedContents/0"}
+
+
+class DownCaches(Caches):
+    def list(self) -> list[Any]:
+        raise ConnectionError("503 from the caches API")
+
+
+def test_cache_api_errors_fall_back_to_implicit_caching(caplog: pytest.LogCaptureFixture) -> None:
+    caches = DownCaches()
+
+    class DownAsync(AsyncCaches):
+        async def list(self) -> AsyncIterator[Any]:
+            raise ConnectionError("503 from the caches API")
+
+    c = SimpleNamespace(caches=caches, aio=SimpleNamespace(caches=DownAsync(caches)))
+    with caplog.at_level("WARNING", logger="cachemaxxing"):
+        assert gemini.gemini_cache(c, BIG, "gemini-3.8-flash", expected_reuses=20) is None
+        assert asyncio.run(gemini.gemini_cache_async(c, BIG, "gemini-3.8-flash", expected_reuses=20)) is None
+    assert caplog.text.count("using implicit caching") == 2
