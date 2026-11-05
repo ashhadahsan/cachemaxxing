@@ -1,14 +1,14 @@
 [project]
 name = "cachemaxxing"
 version = "0.10.0"
-description = "Stop paying full price for the same tokens: measure, diagnose and fix prompt-cache misses on Anthropic, OpenAI, Gemini and LiteLLM."
+description = "Stop paying full price for the same tokens: measure, diagnose and fix prompt-cache misses on Anthropic, OpenAI, Azure OpenAI, Gemini and LiteLLM."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Ashhad Ahsan", email = "ashhadahsan@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = []
-keywords = ["llm", "prompt-caching", "anthropic", "openai", "gemini", "litellm", "cost"]
+keywords = ["llm", "prompt-caching", "anthropic", "openai", "azure-openai", "gemini", "litellm", "cost"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",

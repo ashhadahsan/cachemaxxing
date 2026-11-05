@@ -27,6 +27,10 @@ What differs is who places the cache entries, what writes cost, and how long ent
 - **Explicit caching** (`client.caches.create`) guarantees the hit for a TTL you choose, at the input price to create plus hourly storage. A request that uses a cache must not resend the cached `system_instruction` or `tools`. Not available on Gemini 4 Argon.
 - `prompt_token_count` **includes** `cached_content_token_count`; `thoughts_token_count` is billed as output.
 
+## Azure OpenAI
+
+Azure runs the same models with the same request format, so it follows the OpenAI rules above. The differences are deployment names and provisioned deployments: see [Azure OpenAI](azure.md).
+
 ## LiteLLM
 
 LiteLLM takes OpenAI-format messages and translates them. cachemaxxing's `p.litellm(model)` picks the right fields per route: `cache_control` on content parts (and inside the tool's `function`) for Claude, explicit breakpoints for `openai/` GPT-5.6+, and nothing for `gemini/` unless you pass `explicit=True` (LiteLLM then creates an explicit cache for the static prefix).

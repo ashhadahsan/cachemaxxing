@@ -1,11 +1,12 @@
 """The simplest use: a chat kept as a plain list of {"role", "content"} messages, cached on every turn.
 
-uv run --env-file .env python examples/chat.py {openai|anthropic|gemini}
+uv run --env-file .env python examples/chat.py {openai|anthropic|gemini|azure}
 
 Prompt().messages(chat) takes the list as you would send it to OpenAI and builds the request for any provider:
 the system message becomes the cached system prompt, and the conversation is cached up to the latest question,
 so the next turn reads all of it from cache."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +22,14 @@ def ask(provider: str, chat: list[dict[str, str]]) -> tuple[object, str]:
         from openai import OpenAI
 
         r = OpenAI().chat.completions.create(**p.openai_chat("gpt-6-luna"))
+        return r, r.choices[0].message.content or ""
+    if provider == "azure":
+        from openai import OpenAI
+
+        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].split("/openai")[0]  # the portal's URL may include a path
+        client = OpenAI(base_url=f"{endpoint}/openai/v1/", api_key=os.environ["AZURE_OPENAI_API_KEY"])
+        deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-6-luna")  # model is your deployment's name
+        r = client.chat.completions.create(**p.openai_chat(deployment, explicit=True))  # a GPT-5.6+ deployment
         return r, r.choices[0].message.content or ""
     if provider == "anthropic":
         from anthropic import Anthropic

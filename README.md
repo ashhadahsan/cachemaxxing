@@ -35,6 +35,8 @@ print(f"{u.hit_rate:.0%} of input from cache, ~${u.est_cost or 0:.4f}")
 
 The system prompt and the conversation so far get the provider's cache markers, so each turn reads everything before the new question from cache. For tools, RAG chunks or a timestamp, build the prompt from parts: `p.tools(TOOLS).system(SYSTEM).history(chat).retrieved(chunks).user(question)`. The quickstart shows [where the markers go, and the exact request](https://ashhadahsan.github.io/cachemaxxing/quickstart/).
 
+**Azure OpenAI** works with the same code: your client, `model` set to your deployment's name. See [Azure OpenAI](https://ashhadahsan.github.io/cachemaxxing/azure/).
+
 ## Works with
 
 | | How |
@@ -95,12 +97,13 @@ Setup: 8-turn conversations (agents: 3 questions with a tool call), 3 customers 
 
 ## Examples
 
-- [`examples/chat.py`](examples/chat.py): start here. A chat kept as a plain list of messages, cached on every turn, on any provider
-- [`examples/langchain_chat.py`](examples/langchain_chat.py): the same with LangChain `SystemMessage` / `HumanMessage` / `AIMessage`
-- [`examples/quickstart.py`](examples/quickstart.py): one prompt, every provider and LiteLLM
-- [`examples/rag_chat.py`](examples/rag_chat.py): a multi-turn RAG chat with per-turn retrieval, logging and a report
-- [`examples/langchain_agent.py`](examples/langchain_agent.py): a LangChain `create_agent` agent with `CacheMiddleware`
-- [`examples/langgraph_custom.py`](examples/langgraph_custom.py): a hand-built LangGraph graph with `CachedModel`
+- [`examples/tutorial.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/tutorial.py): the tutorial's support bot, with the bug and with the fix
+- [`examples/chat.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/chat.py): start here. A chat kept as a plain list of messages, cached on every turn, on any provider
+- [`examples/langchain_chat.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/langchain_chat.py): the same with LangChain `SystemMessage` / `HumanMessage` / `AIMessage`
+- [`examples/quickstart.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/quickstart.py): one prompt, every provider and LiteLLM
+- [`examples/rag_chat.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/rag_chat.py): a multi-turn RAG chat with per-turn retrieval, logging and a report
+- [`examples/langchain_agent.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/langchain_agent.py): a LangChain `create_agent` agent with `CacheMiddleware`
+- [`examples/langgraph_custom.py`](https://github.com/ashhadahsan/cachemaxxing/blob/main/examples/langgraph_custom.py): a hand-built LangGraph graph with `CachedModel`
 
 ## Install
 

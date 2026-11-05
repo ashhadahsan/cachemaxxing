@@ -2,11 +2,13 @@
 
 uv run --env-file .env python benchmarks/canary.py     (CI: .github/workflows/canary.yml)
 
-Two turns of examples/chat.py per provider, and two of LangChain's CachedModel on OpenAI. It fails when a
-second turn reads nothing from cache on Anthropic or OpenAI, or when usage(), record() or the report can't
-read a reply. Gemini's implicit caching is best-effort, so a Gemini miss only warns. About $0.02 per run."""
+Two turns of examples/chat.py per provider, and two of LangChain's CachedModel on OpenAI. Azure OpenAI runs too
+when AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY are set. It fails when a second turn reads nothing from cache
+on Anthropic, OpenAI or Azure, or when usage(), record() or the report can't read a reply. Gemini's implicit
+caching is best-effort, so a Gemini miss only warns. About $0.02 per run."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,7 +27,7 @@ LOG = Path("canary.jsonl")
 
 def projected() -> float:
     tokens = len(SYSTEM) // 3 + 200  # ponytail: 3 chars/token and no cache hits, so an upper bound
-    models = ["claude-haiku-5-5", "gpt-6-luna", "gemini-3.8-flash", "gpt-6-luna"]
+    models = ["claude-haiku-5-5", "gpt-6-luna", "gemini-3.8-flash", "gpt-6-luna", "gpt-6-luna", "gpt-6-luna"]
     return sum(2 * (tokens * facts.MODELS[m].input + 1024 * facts.MODELS[m].output) for m in models) / 1e6
 
 
@@ -44,15 +46,26 @@ def provider(name: str, budget: w.Budget, log: list[str]) -> int:
     return reads[-1]
 
 
-def langchain(budget: w.Budget, log: list[str]) -> int:
+def azure_model() -> object:
+    from langchain_openai import AzureChatOpenAI
+
+    return AzureChatOpenAI(
+        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"].split("/openai")[0],
+        api_key=os.environ["AZURE_OPENAI_API_KEY"],
+        api_version="2025-04-01-preview",
+        azure_deployment="gpt-6-luna",
+    )
+
+
+def langchain(label: str, budget: w.Budget, log: list[str], model: object = None) -> int:
     from langchain.chat_models import init_chat_model
     from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
     from cachemaxxing.langchain import CachedModel
 
     llm = CachedModel(
-        init_chat_model("openai:gpt-6-luna"),
-        call_site="canary.langchain",
+        model or init_chat_model("openai:gpt-6-luna"),
+        call_site=f"canary.{label}",
         on_record=lambda r: log.append(json.dumps(r)),
     )
     messages: list[BaseMessage] = [SystemMessage(SYSTEM)]
@@ -63,16 +76,20 @@ def langchain(budget: w.Budget, log: list[str]) -> int:
         messages.append(reply)
         budget.spend(usage(reply))
         reads.append(reply.response_metadata["cachemaxxing"]["cache_read_tokens"])  # missing if measuring failed
-    print(f"langchain/openai: cache read per turn {reads}")
+    print(f"{label}: cache read per turn {reads}")
     return reads[-1]
 
 
 if __name__ == "__main__":
     budget = w.Budget(0.05, projected())
     log: list[str] = []
-    misses = [name for name in ("anthropic", "openai", "gemini") if not provider(name, budget, log)]
-    if not langchain(budget, log):
-        misses.append("langchain/openai")
+    azure = bool(os.environ.get("AZURE_OPENAI_ENDPOINT"))  # contributors may not have it; the nightly run does
+    names = ["anthropic", "openai", "gemini", *(["azure"] if azure else [])]
+    misses = [name for name in names if not provider(name, budget, log)]
+    if not langchain("langchain.openai", budget, log):
+        misses.append("langchain.openai")
+    if azure and not langchain("langchain.azure", budget, log, azure_model()):
+        misses.append("langchain.azure")
     LOG.write_text("\n".join(log) + "\n")
     assert main(["report", str(LOG), "--strict", "--html", "canary.html"]) == 0, "report failed on live replies"
     print(f"spent ~${budget.spent:.4f}")
