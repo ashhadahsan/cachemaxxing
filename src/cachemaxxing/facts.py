@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-VERIFIED = "2026-10-30"
+VERIFIED = "2026-11-05"
 
 
 @dataclass(frozen=True)
@@ -53,9 +53,38 @@ MODELS: dict[str, Model] = {
     "claude-sonnet-5-5": Model("anthropic", 2.00, 10.00, 0.10, {"5m": 2.50, "1h": 4.00}, 512, source=_A),
     "claude-opus-5-5": Model("anthropic", 4.00, 20.00, 0.20, {"5m": 5.00, "1h": 8.00}, 512, source=_A),
     "claude-fable-5-1": Model("anthropic", 10.00, 50.00, 0.25, {"5m": 12.50, "1h": 20.00}, 512, source=_A),
-    "gpt-6-luna": Model("openai", 0.10, 0.50, 0.01, {"30m": 0.125, "12h": 0.25}, 1024, source=_O),
-    "gpt-6.1-sol": Model("openai", 2.00, 10.00, 0.10, {"30m": 2.50, "12h": 5.00}, 1024, source=_O),
-    "gpt-6-astra": Model("openai", 10.00, 50.00, 1.00, {"30m": 12.50, "12h": 25.00}, 1024, source=_O),
+    "gpt-6-luna": Model(
+        "openai",
+        0.10,
+        0.50,
+        0.01,
+        {"30m": 0.125, "12h": 0.25},
+        1024,
+        source=_O,
+        long_context=(272_000, Model("openai", 0.20, 0.75, 0.02, {"30m": 0.25, "12h": 0.50}, 1024, source=_O)),
+    ),
+    "gpt-6.1-terra": Model("openai", 1.00, 5.00, 0.05, {"30m": 1.25, "12h": 2.50}, 1024, source=_O),
+    "gpt-6.1-sol": Model(
+        "openai",
+        2.00,
+        10.00,
+        0.10,
+        {"30m": 2.50, "12h": 5.00},
+        1024,
+        source=_O,
+        long_context=(272_000, Model("openai", 4.00, 15.00, 0.20, {"30m": 5.00, "12h": 10.00}, 1024, source=_O)),
+    ),
+    "gpt-6-sol": Model("openai", 2.00, 10.00, 0.20, {"30m": 2.50, "12h": 5.00}, 1024, source=_O),
+    "gpt-6-astra": Model(
+        "openai",
+        10.00,
+        50.00,
+        1.00,
+        {"30m": 12.50, "12h": 25.00},
+        1024,
+        source=_O,
+        long_context=(272_000, Model("openai", 20.00, 75.00, 2.00, {"30m": 25.00, "12h": 50.00}, 1024, source=_O)),
+    ),
     # Gemini caches implicitly; storage_hour marks explicit-cache support.
     # gemini-3.8-flash prices double on 2027-01-01, gemini-4-argon's on 2026-12-01: patch releases then.
     "gemini-3.8-flash": Model("gemini", 0.75, 3.75, 0.075, min_tokens=4096, storage_hour=0.50, source=_G),

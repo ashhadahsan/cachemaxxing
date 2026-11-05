@@ -498,3 +498,8 @@ def test_azure_chat_response_and_a_custom_deployment_name() -> None:
     named = {"object": "response", "model": "prod-chat", "usage": {"input_tokens": 100, "output_tokens": 1}}
     assert usage(named).est_cost is None
     assert usage(named, model="gpt-6-luna").est_cost == pytest.approx((100 * 0.10 + 1 * 0.50) / 1e6)
+
+
+def test_openai_long_context_prices_the_whole_request() -> None:
+    r = {"object": "response", "model": "gpt-6-luna", "usage": {"input_tokens": 300_000, "output_tokens": 0}}
+    assert usage(r).est_cost == pytest.approx(300_000 * 0.20 / 1e6)
