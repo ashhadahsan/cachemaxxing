@@ -33,11 +33,15 @@ FIXES = {  # what to do about each hint: shown by warnings, `report`, `cachemaxx
     "model": "The model changed. Different models never share a cache.",
     "removed": "This call dropped part of the previous one, such as trimmed history. Trim less often, in bigger steps.",
     "last turn": "Only the newest turn differs: that is how a conversation grows, not a miss.",
+    "conversation": (
+        "The conversation differs from the previous call's. That is normal when users take turns. "
+        "Within one conversation, keep history append-only: never edit or re-render earlier turns."
+    ),
 }
 GENERIC_FIX = "Anything that changes per request belongs after the cached prefix: in .retrieved() or .user()."
 NO_READ = "prefix ok, no cache read"
 NO_READ_WHY = (
-    "The request repeated the previous one, but nothing was read from cache: the cache expired (the TTL counts "
+    "The prompt matched the previous request, but nothing was read from cache: the cache expired (the TTL counts "
     "from the previous request), the prefix is below the provider's minimum, or the request reached another server."
 )
 
@@ -48,7 +52,8 @@ class Divergence:
     offset: int  # characters into that value
     a: str  # text around the divergence in request a
     b: str  # ... and in request b
-    hint: str | None  # model, tool order, key order, removed, last turn, whitespace, uuid, timestamp, hex id
+    hint: str | None  # model, tool order, key order, removed, last turn, whitespace, uuid, timestamp, hex id,
+    # conversation (a turn differs: another user's chat, or edited history)
     prefix_chars: int  # identical characters before it (about 4 per token)
 
     def __str__(self) -> str:
@@ -121,7 +126,8 @@ def diff(a: Any, b: Any) -> Divergence | None:
             same = pb.rsplit(".", 1)[0] == parent and {x for x in fa if x[0].startswith(parent)} == {
                 x for x in fb if x[0].startswith(parent)
             }
-            return Divergence(f"{pa} / {pb}", 0, va[:60], vb[:60], "key order" if same else None, seen)
+            hint = "key order" if same else "conversation" if _in_conversation(pa, ra) else None
+            return Divergence(f"{pa} / {pb}", 0, va[:60], vb[:60], hint, seen)
         if va != vb:
             off = len(os.path.commonprefix([va, vb]))
             hint = _hint(pa, va, vb, off, fa, fb, ra)
@@ -151,4 +157,12 @@ def _hint(
     if va.split() == vb.split():
         return "whitespace"
     wa, wb = va[max(0, off - 40) : off + 40], vb[max(0, off - 40) : off + 40]
-    return next((name for name, rx in _HINTS if rx.search(wa) and rx.search(wb)), None)
+    found = next((name for name, rx in _HINTS if rx.search(wa) and rx.search(wb)), None)
+    return found or ("conversation" if _in_conversation(path, ra) else None)
+
+
+def _in_conversation(path: str, req: dict[str, Any]) -> bool:
+    """Whether the path is in a turn of the conversation, not in a leading system or developer message."""
+    m = re.match(r"(messages|input|contents)\[(\d+)\]", path)
+    item = req[m[1]][int(m[2])] if m else None
+    return isinstance(item, dict) and item.get("role") not in ("system", "developer")

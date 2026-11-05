@@ -106,3 +106,25 @@ def test_every_divergence_says_how_to_fix_it() -> None:
     assert str(d).endswith(f"fix: {d.fix}")
     unknown = diff(w(system="alpha"), w(system="beta"))
     assert unknown is not None and unknown.hint is None and unknown.fix == GENERIC_FIX
+
+
+def test_conversation_hint_only_for_turns_of_a_conversation() -> None:
+    def chat(system: str, question: str) -> dict[str, Any]:
+        return {
+            "model": "m",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": "yo"},
+                {"role": "user", "content": "next"},
+            ],
+        }
+
+    assert hint(chat("S", "ana asks"), chat("S", "ben asks")) == "conversation"
+    assert hint(chat("alpha", "q"), chat("beta", "q")) is None  # the system message is the prefix, not a conversation
+    a = {"input": [{"role": "developer", "content": "alpha"}, {"role": "user", "content": "q"}]}
+    b = {"input": [{"role": "developer", "content": "beta"}, {"role": "user", "content": "q"}]}
+    assert hint(a, b) is None
+    gemini_a = {"contents": [{"role": "user", "parts": [{"text": "ana"}]}, {"role": "model", "parts": [{"text": "x"}]}]}
+    gemini_b = {"contents": [{"role": "user", "parts": [{"text": "ben"}]}, {"role": "model", "parts": [{"text": "x"}]}]}
+    assert hint(gemini_a, gemini_b) == "conversation"

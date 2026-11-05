@@ -14,7 +14,7 @@ resp = client.chat.completions.create(**kw)
 stats.add("support.answer", usage(resp), request=kw)
 ```
 
-`Stats` compares each request with the previous one from the same call site. The first time something breaks the cached prefix, it logs a warning on the `cachemaxxing` logger: where the requests diverge, the text before and after, and the fix. After that, it only counts. `stats.table()` shows the most frequent cause for each call site, and `stats.drift` holds all of them. The [tutorial](tutorial.md) walks through a real example. To diagnose without the warnings, use `Stats(warn=False)`. `CacheMiddleware` and `CachedModel` do this for LangChain automatically.
+When a call reads less than half of its input from cache, `Stats` compares its request with the previous one from the same call site. The first time each cause shows up, it logs a warning on the `cachemaxxing` logger: where the requests diverge, the text before and after, and the fix. After that, it only counts. `stats.table()` shows the most frequent cause for each call site, and `stats.drift` holds all of them. The [tutorial](tutorial.md) walks through a real example. To diagnose without the warnings, use `Stats(warn=False)`. `CacheMiddleware` and `CachedModel` do this for LangChain automatically.
 
 For production traffic, or a CI gate, log the calls and use the report.
 
@@ -97,6 +97,9 @@ diverges at system[0].text char 41 (timestamp), after ~14 matching tokens
 | `model` | The model changed; caches are per model | Keep one model per call site |
 | `removed` | History got shorter (truncated or summarized) | Append-only history; summarize rarely and at stable points |
 | `last turn` | Only the previous request's final turn differs | Usually expected: the retrieved context isn't kept in history |
+| `conversation` | An earlier turn of the conversation differs | Normal when users take turns. Within one conversation, keep history append-only |
+
+Users taking turns on one call site are fine. Calls that read most of their input from cache are never reported, even when the previous request was another user's, because only real misses are diagnosed.
 
 ## Prefix OK, still no cache read
 

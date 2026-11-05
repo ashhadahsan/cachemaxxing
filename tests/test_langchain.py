@@ -34,12 +34,12 @@ def request(model: Any, system: Any = "You are helpful.", settings: dict[str, An
     )
 
 
-def reply(provider: str, model: str) -> AIMessage:
+def reply(provider: str, model: str, cache_read: int = 1500) -> AIMessage:
     usage = {
         "input_tokens": 2000,
         "output_tokens": 5,
         "total_tokens": 2005,
-        "input_token_details": {"cache_read": 1500},
+        "input_token_details": {"cache_read": cache_read},
     }
     return AIMessage("ok", usage_metadata=usage, response_metadata={"model_provider": provider, "model_name": model})
 
@@ -234,6 +234,6 @@ def test_middleware_diagnoses_a_changing_system_prompt(caplog: pytest.LogCapture
     model = ChatOpenAI(model="gpt-6-luna", api_key="t")
     with caplog.at_level("WARNING", logger="cachemaxxing"):
         for i in range(3):
-            run(mw, request(model, f"Now: 2026-10-31T10:0{i}:00Z. You are helpful."), reply("openai", "gpt-6-luna"))
+            run(mw, request(model, f"Now: 2026-10-31T10:0{i}:00Z. You are helpful."), reply("openai", "gpt-6-luna", 0))
     assert mw.stats.drift["agent"] == {"system[].text (timestamp)": 2}
     assert "fix: A time changes on every call" in caplog.text

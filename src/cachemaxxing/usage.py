@@ -15,6 +15,7 @@ from .canon import jsonable, plain
 from .diff import NO_READ, NO_READ_WHY, Divergence, diff
 
 _log = logging.getLogger("cachemaxxing")
+_MISS_BELOW = 0.5  # a call that read less than this share of its input from cache counts as a miss
 
 
 @dataclass(frozen=True)
@@ -195,10 +196,10 @@ _HEADER = (
 class Stats:
     """Usage totals per call site, in memory. Safe to share between threads.
 
-    Give `add` each call's request too and Stats diagnoses misses as they happen: it compares the request with
-    the previous one from the same call site, counts what broke the cached prefix in `drift`, shows the top
-    cause in `table()`, and logs a warning with the exact change and the fix the first time each cause shows
-    up for a call site. `warn=False` keeps the diagnosis and drops the warnings."""
+    Give `add` each call's request too and Stats diagnoses misses as they happen. When a call read less than half
+    of its input from cache, it compares the request with the previous one from the same call site, counts the
+    cause in `drift`, shows the top cause in `table()`, and logs a warning with the exact change and the fix the
+    first time each cause shows up for a call site. `warn=False` keeps the diagnosis and drops the warnings."""
 
     def __init__(self, *, warn: bool = True) -> None:
         self.calls: dict[str, int] = {}
@@ -212,7 +213,7 @@ class Stats:
 
     def add(self, call_site: str, u: Usage, request: Any = None) -> Divergence | None:
         """Count one call. With `request` (the kwargs you sent), also diagnose it: returns the Divergence when
-        this request broke the previous one's cached prefix, else None."""
+        the call missed and differs from the previous request in a way that explains it, else None."""
         current = None if request is None else jsonable(request)  # a copy: callers often edit their lists later
         with self._lock:
             self.calls[call_site] = self.calls.get(call_site, 0) + 1
@@ -225,15 +226,20 @@ class Stats:
             previous = self._last.get(call_site)
             if current is not None:
                 self._last[call_site] = current
-        if previous is None or current is None:
+        # ponytail: the previous request may be another user's, so only real misses count; a differing turn is
+        # not a broken prefix. Track conversations if this proves too coarse.
+        if previous is None or current is None or u.hit_rate >= _MISS_BELOW:
             return None
         div = diff(previous, current)
-        if div is not None and div.hint != "last turn":
-            note, why = _label(div), f"the cached prefix broke: {div}"
-        elif u.cache_read == 0:
+        turns_only = div is None or div.hint in ("last turn", "conversation")
+        if turns_only and u.cache_read == 0:
             note, why, div = NO_READ, f"{NO_READ}. {NO_READ_WHY}", None
-        else:
+        elif div is None or div.hint == "last turn":
             return None
+        elif div.hint == "conversation":
+            note, why = _label(div), f"only {u.hit_rate:.0%} of the input came from cache: {div}"
+        else:
+            note, why = _label(div), f"the cached prefix broke: {div}"
         with self._lock:
             seen = self.drift.setdefault(call_site, Counter())
             first = note not in seen

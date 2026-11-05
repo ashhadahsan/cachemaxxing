@@ -142,7 +142,7 @@ def test_report_on_a_redacted_log_matches_the_plain_one(tmp_path: Path, capsys: 
     got = capsys.readouterr().out
     assert "2026-10-30" not in redacted.read_text()
     table = expected.split("\n\n")[0].replace("(timestamp)", "(?)")  # same numbers and drifting field, no characters
-    assert got.split("\n\n")[0] == table and "chat: system[].text (?) on 2 of 2 follow-up calls" in got
+    assert got.split("\n\n")[0] == table and "chat: system[].text (?) on 1 of 2 follow-up calls" in got
 
 
 def test_dashboard_draws_only_the_last_calls_of_each_site(

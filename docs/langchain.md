@@ -81,7 +81,7 @@ Some middleware rewrites the cached prefix on every call and will lower your hit
 - tool-selection middleware that changes the tool list
 - summarization or context-editing middleware that rewrites history
 
-You don't need to go looking for these. `CacheMiddleware` and `CachedModel` compare each model call with the previous one from the same call site. The first time something breaks the cached prefix, they log a warning on the `cachemaxxing` logger. It shows where the change happened, the text before and after it, and how to fix it:
+You don't need to go looking for these. When a model call reads less than half of its input from cache, `CacheMiddleware` and `CachedModel` compare it with the previous call from the same call site. The first time each cause shows up, they log a warning on the `cachemaxxing` logger. It shows where the change happened, the text before and after it, and how to fix it:
 
 ```text
 WARNING cachemaxxing: support.agent: the cached prefix broke: diverges at system[0].text char 22 (timestamp), after ~5 matching tokens
