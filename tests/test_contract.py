@@ -78,3 +78,21 @@ def test_gemini_accepts_an_openai_style_chat() -> None:
     kw = Prompt().messages(chat).gemini("gemini-3.8-flash")
     types.GenerateContentConfig.model_validate(kw["config"])
     assert [types.Content.model_validate(c).role for c in kw["contents"]] == ["user", "model", "user"]
+
+
+@pytest.mark.parametrize("api", ["azure client", "v1 base url"])
+def test_azure_openai(api: str) -> None:
+    openai = pytest.importorskip("openai")
+    seen: list[Any] = []
+    http = httpx.Client(transport=transport("openai_chat.json", seen))
+    client = (
+        openai.AzureOpenAI(
+            azure_endpoint="https://x.openai.azure.com", api_key="t", api_version="2025-04-01-preview", http_client=http
+        )
+        if api == "azure client"
+        else openai.OpenAI(base_url="https://x.openai.azure.com/openai/v1/", api_key="t", http_client=http)
+    )
+    resp = client.chat.completions.create(**prompt().openai_chat("prod-chat", explicit=True))
+    assert seen[0]["model"] == "prod-chat" and seen[0]["prompt_cache_options"] == {"mode": "explicit", "ttl": "30m"}
+    assert "prompt_cache_breakpoint" in json.dumps(seen[0])
+    assert usage(resp).cache_read == 1024

@@ -11,8 +11,8 @@ class Prompt(call_site: 'str' = 'default') -> 'None'
   Prompt.history(self, messages: 'Sequence[Any]') -> 'Self'
   Prompt.litellm(self, model: 'str', *, ttl: 'str | None' = None, explicit: 'bool' = False) -> 'Json'
   Prompt.messages(self, messages: 'Sequence[Any]') -> 'Self'
-  Prompt.openai(self, model: 'str', *, ttl: 'str' = '30m', cache_key: 'str | None' = None, diagnose: 'bool | str' = False) -> 'Json'
-  Prompt.openai_chat(self, model: 'str', *, ttl: 'str' = '30m', cache_key: 'str | None' = None, diagnose: 'bool | str' = False) -> 'Json'
+  Prompt.openai(self, model: 'str', *, ttl: 'str' = '30m', cache_key: 'str | None' = None, diagnose: 'bool | str' = False, explicit: 'bool | None' = None) -> 'Json'
+  Prompt.openai_chat(self, model: 'str', *, ttl: 'str' = '30m', cache_key: 'str | None' = None, diagnose: 'bool | str' = False, explicit: 'bool | None' = None) -> 'Json'
   Prompt.prefix_hash(self) -> 'str'
   Prompt.retrieved(self, chunks: 'Parts') -> 'Self'
   Prompt.static: property
@@ -32,13 +32,13 @@ gemini_cache_async(client: 'Any', p: 'Prompt', model: 'str', *, expected_reuses:
 record(call_site: 'str', request: 'Any', response: 'Any', *, redact: 'Callable[[str], str] | None' = None) -> 'dict[str, Any]'
 should_cache(prefix_tokens: 'int', expected_reuses: 'int', provider: 'str', model: 'str', *, interval_s: 'float' = 60.0) -> 'Decision'
 usage(response: 'Any', model: 'str | None' = None) -> 'Usage'
-class langchain.CacheMiddleware(call_site: 'str' = 'agent', *, ttl: 'str | None' = None, on_record: 'Callable[[dict[str, Any]], None] | None' = None, redact: 'Callable[[str], str] | None' = None) -> 'None'
+class langchain.CacheMiddleware(call_site: 'str' = 'agent', *, ttl: 'str | None' = None, on_record: 'Callable[[dict[str, Any]], None] | None' = None, redact: 'Callable[[str], str] | None' = None, explicit: 'bool | None' = None) -> 'None'
   langchain.CacheMiddleware.awrap_model_call(self, request: 'ModelRequest[Any]', handler: 'Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]]') -> 'Any'
   langchain.CacheMiddleware.wrap_model_call(self, request: 'ModelRequest[Any]', handler: 'Callable[[ModelRequest[Any]], ModelResponse[Any]]') -> 'Any'
-class langchain.CachedModel(model: 'Runnable[Any, Any]', *, system: 'SystemMessage | str | None' = None, call_site: 'str' = 'graph', ttl: 'str | None' = None, on_record: 'Callable[[dict[str, Any]], None] | None' = None, redact: 'Callable[[str], str] | None' = None) -> 'None'
+class langchain.CachedModel(model: 'Runnable[Any, Any]', *, system: 'SystemMessage | str | None' = None, call_site: 'str' = 'graph', ttl: 'str | None' = None, on_record: 'Callable[[dict[str, Any]], None] | None' = None, redact: 'Callable[[str], str] | None' = None, explicit: 'bool | None' = None) -> 'None'
   langchain.CachedModel.ainvoke(self, input: 'Any', config: 'RunnableConfig | None' = None, **kwargs: 'Any') -> 'BaseMessage'
   langchain.CachedModel.invoke(self, input: 'Any', config: 'RunnableConfig | None' = None, **kwargs: 'Any') -> 'BaseMessage'
-langchain.cache_fields(model: 'Any', system: 'SystemMessage | str | None' = None, *, call_site: 'str' = 'graph', ttl: 'str | None' = None, tools: 'Sequence[Any]' = ()) -> 'tuple[SystemMessage | None, dict[str, Any]]'
+langchain.cache_fields(model: 'Any', system: 'SystemMessage | str | None' = None, *, call_site: 'str' = 'graph', ttl: 'str | None' = None, tools: 'Sequence[Any]' = (), explicit: 'bool | None' = None) -> 'tuple[SystemMessage | None, dict[str, Any]]'
 facts.MODELS: dict
 class facts.Model(provider: 'str', input: 'float', output: 'float', cache_read: 'float', cache_write: 'dict[str, float]' = <factory>, min_tokens: 'int' = 1024, storage_hour: 'float | None' = None, long_context: 'tuple[int, Model] | None' = None, source: 'str' = '') -> None
 facts.PROVIDERS: dict

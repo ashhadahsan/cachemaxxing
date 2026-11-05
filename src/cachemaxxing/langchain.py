@@ -11,6 +11,7 @@
 Per model call, and only for that call (agent state is never modified):
 - OpenAI GPT-5.6+: an explicit breakpoint on the system prompt, implicit mode for the growing conversation.
 - OpenAI before 5.6: a `prompt_cache_key` derived from the call site and the system prompt + tools.
+- Azure OpenAI: like GPT-5.6+ when the deployment's name says it is one, or with explicit=True; otherwise left as is.
 - Anthropic: a marker on the system prompt and automatic caching for the conversation tail. Use this or
   langchain-anthropic's AnthropicPromptCachingMiddleware, not both.
 - Gemini and anything else: left as is (Gemini caches implicitly).
@@ -41,12 +42,17 @@ _log = logging.getLogger("cachemaxxing")
 def _provider(model: Any) -> tuple[str, str]:
     while hasattr(model, "bound"):  # llm.bind_tools(...) / .bind(...) wrap the chat model in a RunnableBinding
         model = model.bound
-    name = str(getattr(model, "model_name", None) or getattr(model, "model", None) or "")
+    name = (
+        getattr(model, "model_name", None) or getattr(model, "model", None) or getattr(model, "deployment_name", None)
+    )
+    name = str(name or "")
     kind = type(model).__name__
     if "Anthropic" in kind:
         return "anthropic", name
-    if kind == "ChatOpenAI":  # Azure and other OpenAI-compatible classes may not accept the new cache fields
+    if kind == "ChatOpenAI":  # other OpenAI-compatible classes may not accept the new cache fields
         return "openai", name
+    if kind == "AzureChatOpenAI":
+        return "azure", name
     if "Google" in kind:
         return "gemini", name
     return "other", name
@@ -129,6 +135,7 @@ def cache_fields(
     call_site: str = "graph",
     ttl: str | None = None,
     tools: Sequence[Any] = (),
+    explicit: bool | None = None,
 ) -> tuple[SystemMessage | None, dict[str, Any]]:
     """For a model call in your own LangGraph node: the system message with the right cache marker, and the
     extra keyword arguments for `invoke`. Same rules as CacheMiddleware.
@@ -141,13 +148,14 @@ def cache_fields(
     if provider == "anthropic":
         cc = _cc(_check_ttl("anthropic", ttl or "5m"))  # marker on the system prompt + automatic tail caching
         return _mark(msg, "cache_control", cc), {"cache_control": cc}
-    if provider == "openai" and openai_explicit(name):
+    breakpoints = openai_explicit(name) if explicit is None else explicit
+    if provider in ("openai", "azure") and breakpoints:
         options = {"mode": "implicit", "ttl": _check_ttl("openai", ttl or "30m")}
         return _mark(msg, "prompt_cache_breakpoint", {"mode": "explicit"}), {"prompt_cache_options": options}
     if provider == "openai":
         prefix = canonical_json([[_tool_name(t) for t in tools], jsonable(msg.content if msg else "")])
         return msg, {"prompt_cache_key": f"{call_site}:{hashlib.sha256(prefix.encode()).hexdigest()[:16]}"}
-    return msg, {}  # Gemini caches implicitly; other providers are left alone
+    return msg, {}  # Gemini caches implicitly; Azure on an unknown deployment name and other providers are left alone
 
 
 class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
@@ -160,21 +168,34 @@ class CacheMiddleware(AgentMiddleware[Any, Any, Any]):
         ttl: str | None = None,
         on_record: Callable[[dict[str, Any]], None] | None = None,
         redact: Callable[[str], str] | None = None,
+        explicit: bool | None = None,
     ) -> None:
         """`call_site`: your name for this agent in Stats, logs and traces (any string, see `Prompt`).
         `ttl`: "5m"/"1h" for Anthropic, "30m"/"12h" for OpenAI (defaults: 5m, 30m).
         `on_record`: called with a `record()` dict per model call, e.g. to append it to a JSONL log.
-        `redact`: passed to `record()`, so the `on_record` lines hold no prompt or output text."""
+        `redact`: passed to `record()`, so the `on_record` lines hold no prompt or output text.
+        `explicit`: True for an Azure GPT-5.6+ deployment with another name, False for a provisioned one."""
         _check_init_ttl(ttl)
         super().__init__()
-        self.call_site, self.ttl, self.on_record, self.redact = call_site, ttl, on_record, redact
+        self.call_site, self.ttl, self.on_record, self.redact, self.explicit = (
+            call_site,
+            ttl,
+            on_record,
+            redact,
+            explicit,
+        )
         self.stats = Stats()
 
     def _prepare(self, request: ModelRequest[Any]) -> ModelRequest[Any]:
         tools = request.tools or []
         try:
             system, extra = cache_fields(
-                request.model, request.system_message, call_site=self.call_site, ttl=self.ttl, tools=tools
+                request.model,
+                request.system_message,
+                call_site=self.call_site,
+                ttl=self.ttl,
+                tools=tools,
+                explicit=self.explicit,
             )
         except ValueError:  # configuration (e.g. a TTL this provider lacks): raise before anything is sent
             raise
@@ -225,7 +246,7 @@ class CachedModel(Runnable[Any, BaseMessage]):
 
     A leading SystemMessage in the input is used as is (and marked); otherwise `system` is prepended.
     `call_site` is your name for this model call in Stats, logs and traces (any string, see `Prompt`).
-    `on_record` and `redact` work as in CacheMiddleware."""
+    `on_record`, `redact` and `explicit` work as in CacheMiddleware."""
 
     def __init__(
         self,
@@ -236,12 +257,14 @@ class CachedModel(Runnable[Any, BaseMessage]):
         ttl: str | None = None,
         on_record: Callable[[dict[str, Any]], None] | None = None,
         redact: Callable[[str], str] | None = None,
+        explicit: bool | None = None,
     ) -> None:
         self.model, self.call_site, self.ttl, self.on_record, self.redact = model, call_site, ttl, on_record, redact
+        self.explicit = explicit
         self.system = SystemMessage(content=system) if isinstance(system, str) else system
         self.stats = Stats()
         self._tools = _bound_tools(model)
-        _, extra = cache_fields(model, None, call_site=call_site, ttl=ttl, tools=self._tools)
+        _, extra = cache_fields(model, None, call_site=call_site, ttl=ttl, tools=self._tools, explicit=explicit)
         self._bound = model.bind(**extra) if extra else model
 
     def _messages(self, input: Any) -> list[BaseMessage]:
@@ -249,7 +272,9 @@ class CachedModel(Runnable[Any, BaseMessage]):
         msgs = convert_to_messages(raw)
         system, rest = (msgs[0], msgs[1:]) if msgs and isinstance(msgs[0], SystemMessage) else (self.system, msgs)
         try:
-            marked, _ = cache_fields(self.model, system, call_site=self.call_site, ttl=self.ttl, tools=self._tools)
+            marked, _ = cache_fields(
+                self.model, system, call_site=self.call_site, ttl=self.ttl, tools=self._tools, explicit=self.explicit
+            )
         except ValueError:
             raise
         except Exception:

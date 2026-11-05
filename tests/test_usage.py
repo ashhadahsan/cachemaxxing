@@ -481,3 +481,20 @@ def test_a_miss_inside_a_conversation_says_so_without_claiming_a_broken_prefix(
     assert s.drift["s"] == {"messages[].content[].text (conversation)": 1}
     assert "only 30% of the input came from cache" in caplog.text and "broke" not in caplog.text
     assert "users take turns" in d.fix
+
+
+def test_azure_chat_response_and_a_custom_deployment_name() -> None:
+    r = {
+        "object": "chat.completion",
+        "model": "gpt-6-luna-2026-09-22",  # recorded from a live Azure call
+        "usage": {
+            "prompt_tokens": 6306,
+            "completion_tokens": 64,
+            "prompt_tokens_details": {"audio_tokens": 0, "cached_tokens": 6291, "cache_write_tokens": 12},
+        },
+    }
+    u = usage(r)
+    assert (u.provider, u.input, u.cache_read, u.cache_write) == ("openai", 6306, 6291, 12) and u.est_cost is not None
+    named = {"object": "response", "model": "prod-chat", "usage": {"input_tokens": 100, "output_tokens": 1}}
+    assert usage(named).est_cost is None
+    assert usage(named, model="gpt-6-luna").est_cost == pytest.approx((100 * 0.10 + 1 * 0.50) / 1e6)

@@ -336,3 +336,15 @@ def test_messages_text_parts_and_unconvertible_turns() -> None:
     assert p.static == ["S"]
     tool_turn = {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]}
     assert Prompt().history([tool_turn]).gemini("g")["contents"] == [tool_turn]  # left for you to convert
+
+
+def test_explicit_overrides_detection_for_azure_deployment_names() -> None:
+    p = Prompt("x").system("S").user("q")
+    named = p.openai_chat("prod-chat", explicit=True)  # Azure: model is the deployment's name
+    assert named["model"] == "prod-chat" and named["prompt_cache_options"] == {"mode": "explicit", "ttl": "30m"}
+    assert "prompt_cache_breakpoint" in str(named) and "prompt_cache_key" not in named
+    assert "prompt_cache_breakpoint" in str(p.openai("prod-chat", explicit=True, ttl="12h"))
+    ptu = p.openai_chat("gpt-6-luna", explicit=False)  # provisioned deployments take no breakpoints
+    assert "prompt_cache_breakpoint" not in str(ptu) and "prompt_cache_options" not in ptu
+    assert ptu["prompt_cache_key"].startswith("x:")
+    assert p.openai_chat("gpt-6-luna") == p.openai_chat("gpt-6-luna", explicit=None)

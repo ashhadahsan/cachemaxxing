@@ -252,11 +252,20 @@ class Prompt:
         return kw
 
     def openai(
-        self, model: str, *, ttl: str = "30m", cache_key: str | None = None, diagnose: bool | str = False
+        self,
+        model: str,
+        *,
+        ttl: str = "30m",
+        cache_key: str | None = None,
+        diagnose: bool | str = False,
+        explicit: bool | None = None,
     ) -> Json:
         """kwargs for openai `client.responses.create(**kwargs)`. diagnose=<previous response id> asks OpenAI
-        (GPT-5.6+) to compare with that response; usage(response).miss_reason then says why a cache missed."""
-        kw = self._openai(model, ttl, cache_key, field="input", role="developer", text_type="input_text")
+        (GPT-5.6+) to compare with that response; usage(response).miss_reason then says why a cache missed.
+
+        Azure OpenAI: `model` is your deployment's name. Explicit breakpoints are chosen from the name, so pass
+        explicit=True for a GPT-5.6+ deployment with another name, and explicit=False for a provisioned one."""
+        kw = self._openai(model, ttl, cache_key, explicit, field="input", role="developer", text_type="input_text")
         if isinstance(diagnose, str):
             if "prompt_cache_options" not in kw:
                 raise ValueError("prompt cache diagnostics need GPT-5.6 or later")
@@ -264,17 +273,35 @@ class Prompt:
         return kw
 
     def openai_chat(
-        self, model: str, *, ttl: str = "30m", cache_key: str | None = None, diagnose: bool | str = False
+        self,
+        model: str,
+        *,
+        ttl: str = "30m",
+        cache_key: str | None = None,
+        diagnose: bool | str = False,
+        explicit: bool | None = None,
     ) -> Json:
-        """kwargs for openai `client.chat.completions.create(**kwargs)` and OpenAI-compatible servers."""
+        """kwargs for openai `client.chat.completions.create(**kwargs)` and OpenAI-compatible servers.
+        `explicit` works as in `openai()`."""
         if ttl == "12h":
             raise ValueError("the 12h cache TTL is Responses-only; use Prompt.openai()")
         if isinstance(diagnose, str):
             raise ValueError("prompt cache diagnostics are Responses-only; use Prompt.openai()")
-        return self._openai(model, ttl, cache_key, field="messages", role="system", text_type="text")
+        return self._openai(model, ttl, cache_key, explicit, field="messages", role="system", text_type="text")
 
-    def _openai(self, model: str, ttl: str, cache_key: str | None, *, field: str, role: str, text_type: str) -> Json:
-        explicit = openai_explicit(model)
+    def _openai(
+        self,
+        model: str,
+        ttl: str,
+        cache_key: str | None,
+        explicit: bool | None,
+        *,
+        field: str,
+        role: str,
+        text_type: str,
+    ) -> Json:
+        if explicit is None:
+            explicit = openai_explicit(model)
         if explicit:
             _check_ttl("openai", ttl)
         bp: Json | None = {"mode": "explicit"} if explicit else None
