@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Source of docs/assets/og.png, the link preview image. Regenerate with:
+     "Google Chrome" --headless=new --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,630 \
+       --virtual-time-budget=4000 --screenshot=docs/assets/og.png "file://$PWD/design/og.html"
+     The numbers are the second call of examples/tutorial.py, before and with --fixed. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cachemaxxing link preview</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1200px; height: 630px; overflow: hidden; }
+body {
+  background: radial-gradient(900px 420px at 50% -10%, rgba(235, 104, 52, .24), transparent 70%), #0d0d0d;
+  color: #f0efec; font-family: "IBM Plex Sans", system-ui, sans-serif;
+  padding: 56px 72px; display: flex; flex-direction: column; justify-content: space-between;
+}
+.brand { display: flex; align-items: center; gap: 16px; font-size: 32px; font-weight: 700; }
+.brand img { width: 52px; height: 52px; }
+h1 { font-size: 74px; line-height: 1.06; letter-spacing: -.02em; font-weight: 700; }
+h1 span { color: #eb6834; }
+.result { display: grid; grid-template-columns: 1fr 64px 1fr; align-items: center; gap: 12px; }
+.tile { background: #161615; border: 1px solid rgba(255, 255, 255, .12); border-radius: 16px; padding: 20px 28px; }
+.tile b { display: block; font-size: 60px; line-height: 1.05; font-weight: 700; }
+.tile.after b { color: #5fd38a; }
+.tile p { font-family: "JetBrains Mono", monospace; font-size: 20px; color: #c3c2b7; margin-top: 6px; }
+.arrow { text-align: center; font-size: 44px; color: #9a988f; }
+</style>
+</head>
+<body>
+  <div class="brand"><img src="../docs/assets/logo.svg" alt="">cachemaxxing</div>
+  <h1>Stop paying full price<br>for the <span>same tokens.</span></h1>
+  <div class="result">
+    <div class="tile"><b>0%</b><p>read from cache, prompt bug</p></div>
+    <div class="arrow">→</div>
+    <div class="tile after"><b>98%</b><p>read from cache, bug fixed</p></div>
+  </div>
+</body>
+</html>

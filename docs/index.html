@@ -5,10 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cachemaxxing: stop paying full price for the same tokens</title>
 <meta name="description" content="A zero-dependency Python library that measures your LLM prompt-cache hit rate, finds the byte where your prompts stop repeating, and lays them out so Anthropic, OpenAI and Gemini bill the repeat at the cached rate.">
-<meta property="og:title" content="cachemaxxing">
-<meta property="og:description" content="Stop paying full price for the same tokens. Prompt-cache hit rate, drift diagnosis and cache-friendly layouts for Anthropic, OpenAI and Gemini.">
+<meta property="og:title" content="cachemaxxing: stop paying full price for the same tokens">
+<meta property="og:description" content="An open-source Python library that finds why your LLM prompt cache misses, tells you how to fix it, and lays out your prompts so the repeat is billed at the cached rate. Anthropic, OpenAI, Azure OpenAI and Gemini.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ashhadahsan.github.io/cachemaxxing/">
+<meta property="og:image" content="https://ashhadahsan.github.io/cachemaxxing/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="cachemaxxing: stop paying full price for the same tokens. From 0% to 98% read from cache.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -333,7 +338,7 @@ kw = p.<span class="f">anthropic</span>(<span class="s">"claude-haiku-5-5"</span
       <div class="works">
         <a class="work" href="quickstart/"><strong>Anthropic</strong><code>p.anthropic(model)</code></a>
         <a class="work" href="quickstart/"><strong>OpenAI</strong><code>p.openai(model) · p.openai_chat(model)</code></a>
-        <a class="work" href="azure/"><strong>Azure OpenAI</strong><code>p.openai_chat("your-deployment")</code></a>
+        <a class="work" href="azure/"><strong>Azure OpenAI</strong><code>p.openai_chat(deployment)</code></a>
         <a class="work" href="quickstart/"><strong>Gemini</strong><code>p.gemini(model) · gemini_cache()</code></a>
         <a class="work" href="quickstart/"><strong>LiteLLM</strong><code>p.litellm("anthropic/...")</code></a>
         <a class="work" href="langchain/"><strong>LangChain and LangGraph</strong><code>CachedModel(llm) · CacheMiddleware()</code></a>

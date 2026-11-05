@@ -4,6 +4,21 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- Azure OpenAI support, with a new guide. `Prompt.openai` and `openai_chat` take `explicit=`: `True` for a GPT-5.6+ deployment whose name doesn't say so, `False` for a provisioned deployment. `CacheMiddleware`, `CachedModel` and `cache_fields` take it too, and now work with `AzureChatOpenAI`. Tested live on `gpt-6-luna`; `examples/chat.py azure` runs it. Cost estimates use OpenAI's list prices.
+- A `conversation` hint for a difference in an earlier turn of the conversation, with its own advice.
+- Prices for `gpt-6.1-terra` and `gpt-6-sol`.
+
+### Fixed
+
+- False alarms in diagnosis when users take turns on one call site, the normal case in production. `Stats`, `report`, the dashboard and the LangChain wrappers reported "the cached prefix broke" for calls that read 98–99% from cache, because the previous request was another user's. Now only calls that read less than half of their input from cache are diagnosed, and a differing turn isn't reported as a broken prefix. Hit rates and the `--min-hit-rate` gate were never affected.
+- `est_cost` and `saved` now use OpenAI's higher prices for prompts over 272K tokens, on `gpt-6-luna`, `gpt-6.1-sol` and `gpt-6-astra`.
+
+### Changed
+
+- All provider prices were re-checked on 2026-11-05.
+
 ## [0.10.0] - 2026-10-31
 
 ### Added
