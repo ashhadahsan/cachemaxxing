@@ -4,6 +4,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-05
+
 ### Added
 
 - Azure OpenAI support, with a new guide. `Prompt.openai` and `openai_chat` take `explicit=`: `True` for a GPT-5.6+ deployment whose name doesn't say so, `False` for a provisioned deployment. `CacheMiddleware`, `CachedModel` and `cache_fields` take it too, and now work with `AzureChatOpenAI`. Tested live on `gpt-6-luna`; `examples/chat.py azure` runs it. Cost estimates use OpenAI's list prices.
@@ -139,7 +141,8 @@ This is the release candidate for 1.0. The public API is now frozen.
 - `examples/quickstart.py` for Anthropic, OpenAI, Gemini and LiteLLM.
 - `examples/rag_chat.py`: a multi-turn RAG chat with per-turn retrieval, append-only history, `diff` between turns, JSONL logging and a `Stats` table.
 
-[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.5.0...v0.9.0
 [0.5.0]: https://github.com/ashhadahsan/cachemaxxing/compare/v0.4.1...v0.5.0
