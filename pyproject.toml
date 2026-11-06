@@ -58,7 +58,7 @@ dev = [
 ]
 docs = [
     "mkdocstrings-python>=2.0.10",
-    "zensical==0.0.73",
+    "zensical==0.0.74",
 ]
 
 [tool.ruff]
